@@ -792,7 +792,7 @@ const TradeApp = (function() {
           ${reviewInfo}
         </td>
         <td class="py-3 px-3 text-center">
-          ${(t.screenshot || t.hasScreenshot) ? `
+          ${(t.screenshot || t.chartUrl || t.hasScreenshot) ? `
             <button type="button" class="btn-preview-thumb p-1 rounded-md hover:bg-slate-700 text-indigo-400 transition" data-id="${t.id}" data-num="${t.tradeNum}" title="Click to view chart screenshot">
               <i data-lucide="image" class="w-4 h-4"></i>
             </button>
@@ -1332,6 +1332,10 @@ const TradeApp = (function() {
       // Screenshot
       if (trade.screenshot) {
         setScreenshot(trade.screenshot);
+      } else if (trade.chartUrl) {
+        const fileIdMatch = trade.chartUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        const directImg = fileIdMatch ? `https://lh3.googleusercontent.com/d/${fileIdMatch[1]}` : trade.chartUrl;
+        setScreenshot(directImg);
       } else if ((trade.hasScreenshot || trade.tradeNum) && typeof TradeStorage !== 'undefined') {
         TradeStorage.getScreenshot(trade.id, trade.tradeNum).then(img => {
           if (img) {

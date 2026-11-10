@@ -63,17 +63,35 @@ function doPost(e) {
     if (trades.length > 0) {
       var lastRow = sheet.getLastRow();
       var lastCol = Math.max(sheet.getLastColumn(), 15);
+
+      // Read existing formulas/rich text before clearing so existing charts are preserved
+      var existingFormulas = (lastRow > 1) ? sheet.getRange(2, 1, lastRow - 1, lastCol).getFormulas() : [];
+      var existingRichTexts = [];
+      try {
+        if (lastRow > 1) existingRichTexts = sheet.getRange(2, 1, lastRow - 1, lastCol).getRichTextValues();
+      } catch (e) {}
+
       if (lastRow > 1) {
         sheet.getRange(2, 1, lastRow - 1, lastCol).clearContent();
       }
 
-      var rows = trades.map(function(t) {
+      var rows = trades.map(function(t, idx) {
         var mistakeText = Array.isArray(t.mistakes) ? t.mistakes.join('; ') : (t.mistake || '');
         
         // 1. Process Chart Screenshot: upload to Google Drive if new base64 image
         var chartUrl = t.chartUrl || '';
         if (!chartUrl && t.screenshot && typeof t.screenshot === 'string' && t.screenshot.indexOf('base64') !== -1) {
           chartUrl = saveChartToDrive(t.screenshot, t.tradeNum, t.symbol);
+        }
+
+        // 2. Fallback to existing chart in sheet row if not re-sent
+        if (!chartUrl && existingRichTexts && existingRichTexts[idx] && existingRichTexts[idx][14]) {
+          chartUrl = existingRichTexts[idx][14].getLinkUrl() || '';
+        }
+        if (!chartUrl && existingFormulas && existingFormulas[idx] && existingFormulas[idx][14]) {
+          var f = String(existingFormulas[idx][14]);
+          var match = f.match(/https?:\/\/[^\s"\)]+/);
+          if (match) chartUrl = match[0];
         }
 
         // Formula or text for Column O
@@ -195,6 +213,11 @@ function doGet(e) {
 
     var lastCol = Math.max(sheet.getLastColumn(), 15);
     var data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    var formulas = sheet.getRange(2, 1, lastRow - 1, lastCol).getFormulas();
+    var richTexts = [];
+    try {
+      richTexts = sheet.getRange(2, 1, lastRow - 1, lastCol).getRichTextValues();
+    } catch (e) {}
 
     var trades = data.map(function(row, idx) {
       var isMissed = String(row[2]).toLowerCase().indexOf('missed') !== -1;
@@ -213,12 +236,28 @@ function doGet(e) {
 
       var tradeNum = parseInt(row[0], 10) || (idx + 1);
 
-      // Extract chart URL from Column 15 (Column O)
-      var chartCellVal = String(row[14] || '');
+      // Extract chart URL from Column 15 (Column O) via RichText, Formula, or plain text
       var chartUrl = '';
-      if (chartCellVal.indexOf('http') !== -1) {
-        var match = chartCellVal.match(/https?:\/\/[^\s"\)]+/);
-        chartUrl = match ? match[0] : chartCellVal;
+
+      // 1. Try RichText hyperlink
+      if (richTexts && richTexts[idx] && richTexts[idx][14]) {
+        chartUrl = richTexts[idx][14].getLinkUrl() || '';
+      }
+
+      // 2. Try Formula (=HYPERLINK("https://...", "..."))
+      if (!chartUrl && formulas && formulas[idx] && formulas[idx][14]) {
+        var f = String(formulas[idx][14]);
+        var match = f.match(/https?:\/\/[^\s"\)]+/);
+        if (match) chartUrl = match[0];
+      }
+
+      // 3. Try plain text value
+      if (!chartUrl) {
+        var chartCellVal = String(row[14] || '');
+        if (chartCellVal.indexOf('http') !== -1) {
+          var match2 = chartCellVal.match(/https?:\/\/[^\s"\)]+/);
+          chartUrl = match2 ? match2[0] : chartCellVal;
+        }
       }
 
       return {
