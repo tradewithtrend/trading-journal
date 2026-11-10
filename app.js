@@ -12,7 +12,15 @@ const TradeApp = (function() {
   const STORAGE_KEY_AUTH_SESSION = 'tj_auth_unlocked_session';
 
   let trades = [];
-  let currentTheme = localStorage.getItem(STORAGE_KEY_THEME) || 'dark';
+
+  // Default to White (Light) Theme
+  const THEME_MIGRATION_KEY = 'tj_theme_white_default_v1';
+  if (!localStorage.getItem(THEME_MIGRATION_KEY)) {
+    localStorage.setItem(STORAGE_KEY_THEME, 'light');
+    localStorage.setItem(THEME_MIGRATION_KEY, 'true');
+  }
+  let currentTheme = localStorage.getItem(STORAGE_KEY_THEME) || 'light';
+
   let settings = {
     initialBalance: 10000,
     maxRiskPct: 1.0,
@@ -1304,28 +1312,51 @@ const TradeApp = (function() {
 
   // Bind all UI events
   function bindEvents() {
-    // Nav tabs
+    // Nav tabs (Desktop and Mobile)
     const tabs = [
-      { btn: 'nav-btn-trades', view: 'view-trades' },
-      { btn: 'nav-btn-analytics', view: 'view-analytics' },
-      { btn: 'nav-btn-roadmap', view: 'view-roadmap' },
-      { btn: 'nav-btn-gdrive', view: 'view-gdrive' },
+      { btn: 'nav-btn-trades', mobBtn: 'mobile-nav-btn-trades', view: 'view-trades' },
+      { btn: 'nav-btn-analytics', mobBtn: 'mobile-nav-btn-analytics', view: 'view-analytics' },
+      { btn: 'nav-btn-roadmap', mobBtn: 'mobile-nav-btn-roadmap', view: 'view-roadmap' },
+      { btn: 'nav-btn-gdrive', mobBtn: 'mobile-nav-btn-gdrive', view: 'view-gdrive' },
     ];
 
-    tabs.forEach(tab => {
-      const btnEl = document.getElementById(tab.btn);
-      if (!btnEl) return;
-      btnEl.addEventListener('click', () => {
-        tabs.forEach(t => {
-          document.getElementById(t.btn).className = 'nav-tab px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-all text-slate-400 hover:text-white hover:bg-slate-800';
-          document.getElementById(t.view).classList.add('hidden');
-        });
-        btnEl.className = 'nav-tab active px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-all text-white bg-indigo-600 shadow-sm';
-        document.getElementById(tab.view).classList.remove('hidden');
+    function switchTab(viewId) {
+      tabs.forEach(t => {
+        const desktopBtn = document.getElementById(t.btn);
+        const mobBtn = document.getElementById(t.mobBtn);
+        const viewEl = document.getElementById(t.view);
 
-        if (tab.view === 'view-analytics') renderCharts();
+        if (t.view === viewId) {
+          if (desktopBtn) {
+            desktopBtn.className = 'nav-tab active px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-all text-white bg-indigo-600 shadow-sm';
+          }
+          if (mobBtn) {
+            mobBtn.className = 'mobile-nav-item active flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-bold text-indigo-600 transition';
+          }
+          if (viewEl) viewEl.classList.remove('hidden');
+          if (t.view === 'view-analytics') renderCharts();
+        } else {
+          if (desktopBtn) {
+            desktopBtn.className = 'nav-tab px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-all text-slate-400 hover:text-white hover:bg-slate-800';
+          }
+          if (mobBtn) {
+            mobBtn.className = 'mobile-nav-item flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium text-slate-400 hover:text-indigo-600 transition';
+          }
+          if (viewEl) viewEl.classList.add('hidden');
+        }
       });
+    }
+
+    tabs.forEach(tab => {
+      const desktopBtn = document.getElementById(tab.btn);
+      if (desktopBtn) desktopBtn.addEventListener('click', () => switchTab(tab.view));
+
+      const mobBtn = document.getElementById(tab.mobBtn);
+      if (mobBtn) mobBtn.addEventListener('click', () => switchTab(tab.view));
     });
+
+    const mobLogBtn = document.getElementById('mobile-btn-log-trade');
+    if (mobLogBtn) mobLogBtn.addEventListener('click', () => openTradeModal());
 
     // Top buttons
     document.getElementById('btn-open-new-trade').addEventListener('click', () => openTradeModal());

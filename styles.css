@@ -92,32 +92,67 @@ body {
 
 /* Light Mode Overrides for text & inputs */
 html:not(.dark) .text-white {
-  color: #0F172A !important;
+  color: #0F172A;
 }
 
 html:not(.dark) .text-slate-100 {
-  color: #0F172A !important;
+  color: #0F172A;
 }
 
 html:not(.dark) .text-slate-200 {
-  color: #1E293B !important;
+  color: #1E293B;
 }
 
 html:not(.dark) .text-slate-300 {
-  color: #334155 !important;
+  color: #334155;
 }
 
 html:not(.dark) .text-slate-400 {
-  color: #64748B !important;
+  color: #64748B;
+}
+
+/* Saturated Colored Buttons & Badges: Always keep crisp pure white text */
+html:not(.dark) button.bg-emerald-500,
+html:not(.dark) button.bg-emerald-600,
+html:not(.dark) button.bg-indigo-600,
+html:not(.dark) button.bg-indigo-700,
+html:not(.dark) button.bg-rose-600,
+html:not(.dark) button.bg-teal-600,
+html:not(.dark) .bg-gradient-to-r,
+html:not(.dark) .bg-gradient-to-tr,
+html:not(.dark) .nav-tab.active,
+html:not(.dark) #mobile-btn-log-trade,
+html:not(.dark) button[type="submit"],
+html:not(.dark) #btn-submit-unlock,
+html:not(.dark) #btn-open-new-trade,
+html:not(.dark) #btn-save-trade,
+html:not(.dark) #tab-mode-executed.bg-indigo-600,
+html:not(.dark) .bg-indigo-600,
+html:not(.dark) .bg-emerald-600,
+html:not(.dark) .bg-emerald-500 {
+  color: #FFFFFF !important;
+}
+
+html:not(.dark) button.bg-emerald-500 *,
+html:not(.dark) button.bg-emerald-600 *,
+html:not(.dark) button.bg-indigo-600 *,
+html:not(.dark) .bg-gradient-to-r *,
+html:not(.dark) .bg-gradient-to-tr *,
+html:not(.dark) .nav-tab.active *,
+html:not(.dark) #mobile-btn-log-trade *,
+html:not(.dark) button[type="submit"] * {
+  color: #FFFFFF !important;
 }
 
 html:not(.dark) .bg-slate-900,
 html:not(.dark) .bg-slate-900\/80,
 html:not(.dark) .bg-slate-900\/90,
 html:not(.dark) .bg-slate-900\/60,
+html:not(.dark) .bg-slate-900\/50,
 html:not(.dark) .bg-slate-900\/40 {
-  background-color: #F1F5F9 !important;
+  background-color: #F8FAFC !important;
   color: #0F172A;
+  border-color: #E2E8F0 !important;
 }
 
 html:not(.dark) .bg-slate-950 {
@@ -127,13 +162,15 @@ html:not(.dark) .bg-slate-950 {
 }
 
 html:not(.dark) .bg-slate-800 {
-  background-color: #E2E8F0 !important;
+  background-color: #F1F5F9 !important;
   color: #334155 !important;
+  border-color: #E2E8F0 !important;
 }
 
 html:not(.dark) .border-slate-700,
-html:not(.dark) .border-slate-800 {
-  border-color: #CBD5E1 !important;
+html:not(.dark) .border-slate-800,
+html:not(.dark) .border-borderSubtle {
+  border-color: #E2E8F0 !important;
 }
 
 html:not(.dark) input,
@@ -401,4 +438,65 @@ html:not(.dark) aside[aria-label="Milestone Progress"] .bg-slate-800 {
 /* Table Hover in Light Mode */
 html:not(.dark) tbody tr:hover {
   background-color: #F8FAFC !important;
+}
+
+/* Light Theme Card & Header Shadows */
+html:not(.dark) .kpi-card {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05) !important;
+  background-color: #FFFFFF !important;
+  border-color: #E2E8F0 !important;
+}
+
+html:not(.dark) header {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-bottom-color: #E2E8F0 !important;
+}
+
+html:not(.dark) #mobile-nav {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+  border-top-color: #E2E8F0 !important;
+}
+
+/* Mobile & Touch Optimizations */
+@media (max-width: 767px) {
+  html, body {
+    overflow-x: hidden;
+    width: 100%;
+  }
+
+  /* Safe Area for iPhone Home Indicator */
+  .safe-area-inset-bottom {
+    padding-bottom: calc(0.4rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Adjust KPI cards padding and font on small mobile */
+  .kpi-card {
+    padding: 0.75rem !important;
+    border-radius: 1rem !important;
+  }
+
+  .kpi-card .text-2xl {
+    font-size: 1.25rem !important;
+    line-height: 1.6rem !important;
+  }
+
+  /* Modals on Mobile: full width and scrollable */
+  #modal-trade > div,
+  #modal-apps-script > div,
+  #modal-settings > div {
+    margin: 0.5rem !important;
+    max-height: 94vh !important;
+    border-radius: 1.25rem !important;
+  }
+
+  /* Touch optimization */
+  button, select, input, a {
+    touch-action: manipulation;
+  }
+
+  /* Table horizontal touch scroll */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}
 }
