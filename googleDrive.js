@@ -16,6 +16,9 @@ const GoogleDriveSync = (function() {
   const DRIVE_CSV_NAME = 'Trading_Journal_100_Trades.csv';
   const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
+  // Default Webhook URL (Bake your Google Apps Script URL here so ANY browser connects automatically!)
+  const DEFAULT_WEBHOOK_URL = '';
+
   let tokenClient = null;
   let accessToken = localStorage.getItem(STORAGE_KEY_TOKEN) || null;
   let tokenExpiresAt = parseInt(localStorage.getItem(STORAGE_KEY_TOKEN_EXP) || '0', 10);
@@ -635,6 +638,34 @@ const GoogleDriveSync = (function() {
 
   return {
     init: function() {
+      // 1. Auto-detect URL query parameters (?webhook=... or ?sync=...) for instant 1-click multi-browser connection
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const paramWebhook = urlParams.get('webhook') || urlParams.get('sync');
+        if (paramWebhook) {
+          let clean = paramWebhook.trim();
+          if (clean.startsWith('AKfycb')) {
+            clean = `https://script.google.com/macros/s/${clean}/exec`;
+          } else if (clean.includes('script.google.com') && !clean.endsWith('/exec')) {
+            clean = clean.replace(/\/+$/, '') + '/exec';
+          }
+          webhookUrl = clean;
+          localStorage.setItem(STORAGE_KEY_WEBHOOK, webhookUrl);
+          // Clean address bar URL cleanly without reloading
+          const cleanUrl = window.location.protocol + '//' + window.location.host + window.location.pathname;
+          window.history.replaceState({ path: cleanUrl }, '', cleanUrl);
+          showToast('Webhook URL connected from link!', 'success');
+        }
+      } catch (e) {
+        console.warn('Could not parse URL query parameters:', e);
+      }
+
+      // 2. Fall back to hardcoded DEFAULT_WEBHOOK_URL if not in localStorage
+      if (!webhookUrl && DEFAULT_WEBHOOK_URL) {
+        webhookUrl = DEFAULT_WEBHOOK_URL;
+        localStorage.setItem(STORAGE_KEY_WEBHOOK, webhookUrl);
+      }
+
       // Clean up accidental Apps Script deployment ID in OAuth Client ID box if present
       if (clientId && clientId.startsWith('AKfycb')) {
         clientId = '';

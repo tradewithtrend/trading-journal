@@ -1597,6 +1597,21 @@ const TradeApp = (function() {
       GoogleDriveSync.setWebhookUrl(val);
     });
 
+    const copyMultiBtn = document.getElementById('btn-copy-multibrowser-link');
+    if (copyMultiBtn) {
+      copyMultiBtn.addEventListener('click', () => {
+        const url = GoogleDriveSync.getWebhookUrl();
+        if (!url) {
+          GoogleDriveSync.showToast('Please enter and save your Webhook URL first.', 'error');
+          return;
+        }
+        const fullLink = window.location.origin + window.location.pathname + '?webhook=' + encodeURIComponent(url);
+        navigator.clipboard.writeText(fullLink).then(() => {
+          GoogleDriveSync.showToast('Copied Multi-Browser link! Open this link on any browser to connect automatically.', 'success');
+        });
+      });
+    }
+
     document.getElementById('btn-view-apps-script').addEventListener('click', () => {
       GoogleDriveSync.openAppsScriptModal();
     });
