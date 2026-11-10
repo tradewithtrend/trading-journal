@@ -3,23 +3,41 @@
  * Two-Way Realtime Sync with Google Drive Spreadsheet & Automated Chart Image Uploads
  * 
  * =========================================================================
- * HOW TO UPDATE / DEPLOY IN 30 SECONDS:
+ * HOW TO ACTIVATE DRIVE PERMISSIONS (TAKES 10 SECONDS):
  * =========================================================================
  * 1. Open your Google Sheet in Google Drive.
  * 2. In the top menu, click: Extensions -> Apps Script.
  * 3. Replace all code in the editor with this entire file.
  * 4. Click the Save icon (💾).
- * 5. Click "Deploy" (top right button) -> "Manage deployments".
- * 6. Click the Pencil icon (Edit) on your active deployment.
- * 7. Under "Version", select: "New version".
- * 8. Click "Deploy" -> Click "Done".
+ * 5. In the toolbar at the top, select "authorizePermissions" from the function dropdown.
+ * 6. Click "Run" (▶️).
+ * 7. When Google asks for "Authorization required":
+ *    - Click "Review permissions"
+ *    - Choose your Google account
+ *    - Click "Advanced" (small link at bottom)
+ *    - Click "Go to 100 Trades Journal (unsafe)"
+ *    - Click "Allow"
+ * 8. Now click "Deploy" (top right) -> "Manage deployments" -> Pencil (Edit)
+ *    -> Under Version choose "New version" -> Click "Deploy" -> Click "Done".
  * 
- * (If prompted with "Authorization Required", click "Review permissions" 
- * -> select your account -> "Advanced" -> "Go to 100 Trades Journal (unsafe)" -> "Allow".)
- * 
- * That's it! Your Google Spreadsheet will now automatically upload and display charts in Column O!
+ * That's it! Your Google Spreadsheet can now automatically create the
+ * "100 Trades Journal Charts" folder and insert clickable chart links!
  * =========================================================================
  */
+
+// Run this once inside Apps Script to grant Google Drive upload permissions
+function authorizePermissions() {
+  var folderName = "100 Trades Journal Charts";
+  var folders = DriveApp.getFoldersByName(folderName);
+  var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+  try {
+    folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (e) {}
+  
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  setupHeaders(sheet);
+  Logger.log("SUCCESS: Both Google Sheets and Google Drive permissions are authorized!");
+}
 
 function doPost(e) {
   try {
@@ -58,9 +76,11 @@ function doPost(e) {
           chartUrl = saveChartToDrive(t.screenshot, t.tradeNum, t.symbol);
         }
 
-        // Formula for Column O
+        // Formula or text for Column O
         var chartCellFormula = '';
-        if (chartUrl) {
+        if (chartUrl === 'AUTHORIZATION_NEEDED') {
+          chartCellFormula = '⚠️ Click Run "authorizePermissions" in Apps Script';
+        } else if (chartUrl && chartUrl.indexOf('http') === 0) {
           chartCellFormula = '=HYPERLINK("' + chartUrl + '", "📈 View Chart")';
         } else {
           chartCellFormula = '-';
@@ -95,7 +115,7 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
       tradesCount: trades.length,
-      message: "Synced " + trades.length + " trades (with charts) to Google Drive Spreadsheet!"
+      message: "Synced " + trades.length + " trades to Google Drive Spreadsheet!"
     })).setMimeType(ContentService.MimeType.JSON);
 
   } catch (error) {
@@ -140,13 +160,14 @@ function saveChartToDrive(base64Data, tradeNum, symbol) {
 
     try {
       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    } catch (shareErr) {
-      // Ignore domain permission restriction
-    }
+    } catch (shareErr) {}
 
     return file.getUrl();
   } catch (err) {
     Logger.log('Could not save chart to Drive: ' + err.toString());
+    if (err.toString().indexOf('permission') !== -1 || err.toString().indexOf('DriveApp') !== -1) {
+      return 'AUTHORIZATION_NEEDED';
+    }
     return '';
   }
 }
