@@ -311,6 +311,7 @@ const GoogleDriveSync = (function() {
   async function syncToGoogleSheetWebhook(payload) {
     if (!webhookUrl) return;
 
+    updateStatusUI('syncing', 'Syncing Sheet...');
     try {
       // Uses standard no-cors POST to Google Apps Script Web App
       await fetch(webhookUrl, {
@@ -321,9 +322,36 @@ const GoogleDriveSync = (function() {
         },
         body: JSON.stringify(payload),
       });
-      showToast('Synced to Google Sheet in Drive!', 'success');
+
+      const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      localStorage.setItem(STORAGE_KEY_LAST_SYNC, nowStr);
+      
+      const lastSyncEl = document.getElementById('gdrive-last-synced');
+      if (lastSyncEl) lastSyncEl.textContent = nowStr;
+
+      const fileNameEl = document.getElementById('gdrive-file-name');
+      if (fileNameEl) fileNameEl.textContent = '100 Trades Journal (Google Sheet)';
+
+      updateStatusUI('connected', 'Sheet: Synced');
+      showToast('Synced trades to Google Sheet in Drive!', 'success');
     } catch (err) {
       console.error('Google Sheet Webhook sync error:', err);
+      updateStatusUI('error', 'Sheet Sync Error');
+    }
+  }
+
+  // Refresh status based on active connection mode
+  function refreshStatus() {
+    if (webhookUrl) {
+      updateStatusUI('connected', 'Sheet: Active');
+      const desc = document.getElementById('gdrive-status-desc');
+      if (desc) desc.textContent = 'Connected (Google Sheet)';
+      const fileNameEl = document.getElementById('gdrive-file-name');
+      if (fileNameEl) fileNameEl.textContent = '100 Trades Journal (Google Sheet)';
+    } else if (isAuthenticated()) {
+      updateStatusUI('connected', 'Drive: Synced');
+    } else {
+      updateStatusUI('disconnected', 'Drive: Offline');
     }
   }
 
@@ -455,12 +483,27 @@ const GoogleDriveSync = (function() {
 
   return {
     init: function() {
-      // Update initial UI state
-      if (isAuthenticated()) {
-        updateStatusUI('connected', 'Connected');
-      } else {
-        updateStatusUI('disconnected', 'Drive: Offline');
+      // Clean up accidental Apps Script deployment ID in OAuth Client ID box if present
+      if (clientId && clientId.startsWith('AKfycb')) {
+        clientId = '';
+        localStorage.removeItem(STORAGE_KEY_CLIENT_ID);
+        const clientInput = document.getElementById('input-gdrive-client-id');
+        if (clientInput) clientInput.value = '';
       }
+
+      // Check if Webhook URL needs auto-completion (/exec)
+      if (webhookUrl) {
+        if (webhookUrl.startsWith('AKfycb')) {
+          webhookUrl = `https://script.google.com/macros/s/${webhookUrl}/exec`;
+          localStorage.setItem(STORAGE_KEY_WEBHOOK, webhookUrl);
+        } else if (webhookUrl.includes('script.google.com') && !webhookUrl.endsWith('/exec')) {
+          webhookUrl = webhookUrl.replace(/\/+$/, '') + '/exec';
+          localStorage.setItem(STORAGE_KEY_WEBHOOK, webhookUrl);
+        }
+      }
+
+      // Update initial UI state based on active method
+      refreshStatus();
 
       const clientInput = document.getElementById('input-gdrive-client-id');
       if (clientInput && clientId) {
@@ -498,16 +541,32 @@ const GoogleDriveSync = (function() {
     exportCsv,
     exportJson,
     showToast,
+    refreshStatus,
     setClientId: function(id) {
       clientId = id.trim();
       localStorage.setItem(STORAGE_KEY_CLIENT_ID, clientId);
       initClient();
       showToast('Google Client ID saved!', 'success');
+      refreshStatus();
     },
     setWebhookUrl: function(url) {
-      webhookUrl = url.trim();
+      let clean = url.trim();
+      if (clean.startsWith('AKfycb')) {
+        clean = `https://script.google.com/macros/s/${clean}/exec`;
+      } else if (clean.includes('script.google.com') && !clean.endsWith('/exec')) {
+        clean = clean.replace(/\/+$/, '') + '/exec';
+      }
+      webhookUrl = clean;
       localStorage.setItem(STORAGE_KEY_WEBHOOK, webhookUrl);
-      showToast('Google Sheet Webhook URL saved!', 'success');
+
+      const webhookInput = document.getElementById('input-sheet-webhook-url');
+      if (webhookInput) webhookInput.value = webhookUrl;
+
+      refreshStatus();
+      showToast('Google Sheet Webhook saved & connected!', 'success');
+
+      // Trigger automatic sync immediately
+      syncToDrive();
     }
   };
 })();
