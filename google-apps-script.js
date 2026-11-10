@@ -32,8 +32,9 @@ function doPost(e) {
     // Clear existing data rows if receiving a full sync
     if (trades.length > 0) {
       var lastRow = sheet.getLastRow();
+      var lastCol = sheet.getLastColumn() || 14;
       if (lastRow > 1) {
-        sheet.getRange(2, 1, lastRow - 1, 22).clearContent();
+        sheet.getRange(2, 1, lastRow - 1, lastCol).clearContent();
       }
 
       var rows = trades.map(function(t) {
