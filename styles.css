@@ -371,6 +371,17 @@ html.dark .badge-outcome-missed {
   animation: slideInUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* Shake Animation for Wrong Passcode */
+@keyframes shakeLock {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-8px); }
+  40%, 80% { transform: translateX(8px); }
+}
+
+.shake-error {
+  animation: shakeLock 0.35s ease-in-out;
+}
+
 /* Light Theme Milestone Banner */
 html:not(.dark) aside[aria-label="Milestone Progress"] {
   background: linear-gradient(to right, #EEF2FF, #F8FAFC, #F0FDF4) !important;

@@ -7,6 +7,9 @@ const TradeApp = (function() {
   const STORAGE_KEY_TRADES = '100_trades_journal_trades';
   const STORAGE_KEY_SETTINGS = '100_trades_journal_settings';
   const STORAGE_KEY_THEME = 'trading_journal_theme';
+  const STORAGE_KEY_AUTH_HASH = 'tj_auth_passcode_hash';
+  const STORAGE_KEY_AUTH_REMEMBER = 'tj_auth_remember_device';
+  const STORAGE_KEY_AUTH_SESSION = 'tj_auth_unlocked_session';
 
   let trades = [];
   let currentTheme = localStorage.getItem(STORAGE_KEY_THEME) || 'dark';
@@ -37,12 +40,122 @@ const TradeApp = (function() {
   // Initialize
   function init() {
     initTheme();
+    initAuth();
     loadSettings();
     loadTrades();
     bindEvents();
     bindPasteAndUpload();
     GoogleDriveSync.init();
     renderAll();
+  }
+
+  // Password & Authentication Gate Engine
+  async function hashPasscode(pass) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(pass + '_salt_100trades_2026');
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  function initAuth() {
+    const savedHash = localStorage.getItem(STORAGE_KEY_AUTH_HASH);
+    const remembered = localStorage.getItem(STORAGE_KEY_AUTH_REMEMBER) === 'true';
+    const sessionUnlocked = sessionStorage.getItem(STORAGE_KEY_AUTH_SESSION) === 'true';
+
+    const loginGate = document.getElementById('login-gate');
+    const loginTitle = document.getElementById('login-title');
+    const loginSubtitle = document.getElementById('login-subtitle');
+    const submitBtn = document.getElementById('btn-submit-unlock');
+
+    if (!savedHash) {
+      // First time setup mode
+      loginTitle.textContent = 'Set Master Passcode';
+      loginSubtitle.textContent = 'Create a PIN or password to secure your trading journal';
+      submitBtn.textContent = 'Set Passcode & Enter';
+      loginGate.classList.remove('hidden');
+      setTimeout(() => document.getElementById('input-login-passcode')?.focus(), 100);
+    } else if (remembered || sessionUnlocked) {
+      // Already unlocked
+      loginGate.classList.add('hidden');
+    } else {
+      // Locked state
+      loginTitle.textContent = 'Trade Terminal Locked';
+      loginSubtitle.textContent = 'Enter your master passcode to access your journal';
+      submitBtn.textContent = 'Unlock Journal';
+      loginGate.classList.remove('hidden');
+      setTimeout(() => document.getElementById('input-login-passcode')?.focus(), 100);
+    }
+  }
+
+  async function handleLoginSubmit(e) {
+    e.preventDefault();
+    const input = document.getElementById('input-login-passcode');
+    const entered = input.value.trim();
+    if (!entered) return;
+
+    const savedHash = localStorage.getItem(STORAGE_KEY_AUTH_HASH);
+    const rememberDevice = document.getElementById('check-remember-device').checked;
+    const errorMsg = document.getElementById('login-error-msg');
+    const loginCard = document.getElementById('login-card');
+    const loginGate = document.getElementById('login-gate');
+
+    const enteredHash = await hashPasscode(entered);
+
+    if (!savedHash) {
+      // Setting passcode for first time
+      localStorage.setItem(STORAGE_KEY_AUTH_HASH, enteredHash);
+      if (rememberDevice) {
+        localStorage.setItem(STORAGE_KEY_AUTH_REMEMBER, 'true');
+      }
+      sessionStorage.setItem(STORAGE_KEY_AUTH_SESSION, 'true');
+      loginGate.classList.add('hidden');
+      GoogleDriveSync.showToast('Master Passcode created! Journal secured.', 'success');
+      input.value = '';
+    } else if (enteredHash === savedHash) {
+      // Correct passcode
+      errorMsg.classList.add('hidden');
+      if (rememberDevice) {
+        localStorage.setItem(STORAGE_KEY_AUTH_REMEMBER, 'true');
+      }
+      sessionStorage.setItem(STORAGE_KEY_AUTH_SESSION, 'true');
+      loginGate.classList.add('hidden');
+      GoogleDriveSync.showToast('Welcome back! Journal unlocked.', 'success');
+      input.value = '';
+    } else {
+      // Wrong passcode
+      errorMsg.classList.remove('hidden');
+      loginCard.classList.add('shake-error');
+      setTimeout(() => loginCard.classList.remove('shake-error'), 400);
+      input.select();
+    }
+  }
+
+  function lockJournal() {
+    sessionStorage.removeItem(STORAGE_KEY_AUTH_SESSION);
+    localStorage.removeItem(STORAGE_KEY_AUTH_REMEMBER);
+    initAuth();
+    GoogleDriveSync.showToast('Journal locked.', 'info');
+  }
+
+  async function updatePasscode(newPin) {
+    if (!newPin || newPin.trim().length < 2) {
+      GoogleDriveSync.showToast('Passcode must be at least 2 characters.', 'error');
+      return;
+    }
+    const hash = await hashPasscode(newPin.trim());
+    localStorage.setItem(STORAGE_KEY_AUTH_HASH, hash);
+    GoogleDriveSync.showToast('Master Passcode updated successfully!', 'success');
+    document.getElementById('setting-new-passcode').value = '';
+  }
+
+  function resetPasscode() {
+    if (confirm('Reset Master Passcode? You will be prompted to create a new one.')) {
+      localStorage.removeItem(STORAGE_KEY_AUTH_HASH);
+      localStorage.removeItem(STORAGE_KEY_AUTH_REMEMBER);
+      sessionStorage.removeItem(STORAGE_KEY_AUTH_SESSION);
+      initAuth();
+      GoogleDriveSync.showToast('Passcode reset. Please set a new passcode.', 'info');
+    }
   }
 
   // Theme Management (Dark & White / Light theme)
@@ -1220,6 +1333,50 @@ const TradeApp = (function() {
     const themeBtn = document.getElementById('btn-toggle-theme');
     if (themeBtn) {
       themeBtn.addEventListener('click', toggleTheme);
+    }
+
+    // Lock Button
+    const lockBtn = document.getElementById('btn-lock-journal');
+    if (lockBtn) {
+      lockBtn.addEventListener('click', lockJournal);
+    }
+
+    // Login Form Submit
+    const loginForm = document.getElementById('form-login');
+    if (loginForm) {
+      loginForm.addEventListener('submit', handleLoginSubmit);
+    }
+
+    // Toggle show/hide password
+    const togglePassBtn = document.getElementById('btn-toggle-show-passcode');
+    if (togglePassBtn) {
+      togglePassBtn.addEventListener('click', () => {
+        const passInput = document.getElementById('input-login-passcode');
+        const eyeIcon = document.getElementById('icon-eye-login');
+        if (passInput.type === 'password') {
+          passInput.type = 'text';
+          eyeIcon.setAttribute('data-lucide', 'eye-off');
+        } else {
+          passInput.type = 'password';
+          eyeIcon.setAttribute('data-lucide', 'eye');
+        }
+        lucide.createIcons();
+      });
+    }
+
+    // Reset Passcode from Login Screen
+    const resetLoginBtn = document.getElementById('btn-reset-login-passcode');
+    if (resetLoginBtn) {
+      resetLoginBtn.addEventListener('click', resetPasscode);
+    }
+
+    // Update Passcode from Settings Modal
+    const savePasscodeBtn = document.getElementById('btn-save-new-passcode');
+    if (savePasscodeBtn) {
+      savePasscodeBtn.addEventListener('click', () => {
+        const newPin = document.getElementById('setting-new-passcode').value;
+        updatePasscode(newPin);
+      });
     }
 
     // Empty state

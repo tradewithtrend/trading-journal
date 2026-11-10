@@ -51,6 +51,51 @@
 </head>
 <body class="bg-darkBg text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
 
+  <!-- LOGIN & PASSCODE GATE (PROTECTS YOUR TRADING DATA) -->
+  <div id="login-gate" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-darkBg/95 backdrop-blur-2xl transition-all duration-300">
+    <div id="login-card" class="w-full max-w-sm bg-cardBg border border-borderSubtle rounded-3xl p-6 sm:p-8 shadow-2xl relative text-center space-y-5">
+      <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-emerald-500 flex items-center justify-center shadow-lg shadow-indigo-500/25 mx-auto">
+        <i data-lucide="shield-check" class="w-7 h-7 text-white"></i>
+      </div>
+      
+      <div>
+        <h2 id="login-title" class="text-xl font-black text-white">Trade Terminal Locked</h2>
+        <p id="login-subtitle" class="text-xs text-slate-400 mt-1">Enter your master passcode to access your journal</p>
+      </div>
+
+      <!-- Passcode Form -->
+      <form id="form-login" class="space-y-4">
+        <div class="relative">
+          <input id="input-login-passcode" type="password" placeholder="••••" required autofocus autocomplete="current-password"
+                 class="w-full text-center text-xl tracking-[0.3em] font-mono font-bold bg-slate-900 border border-slate-700 rounded-2xl py-3 px-4 text-white focus:outline-none focus:border-indigo-500 transition shadow-inner" />
+          <button type="button" id="btn-toggle-show-passcode" class="absolute right-3.5 top-3.5 text-slate-400 hover:text-white p-1" title="Show / Hide Passcode">
+            <i data-lucide="eye" id="icon-eye-login" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div id="login-error-msg" class="hidden text-xs text-rose-400 font-semibold">
+          Incorrect passcode. Please try again.
+        </div>
+
+        <div class="flex items-center justify-between text-xs text-slate-400 px-1">
+          <label class="inline-flex items-center cursor-pointer select-none">
+            <input type="checkbox" id="check-remember-device" checked class="form-checkbox text-indigo-500 rounded bg-slate-900 border-slate-700 focus:ring-0 mr-1.5" />
+            <span>Remember device</span>
+          </label>
+          <button type="button" id="btn-reset-login-passcode" class="text-indigo-400 hover:underline">Reset</button>
+        </div>
+
+        <button type="submit" id="btn-submit-unlock" class="w-full py-3 rounded-2xl text-xs font-bold uppercase tracking-wider bg-gradient-to-r from-indigo-600 to-emerald-500 hover:from-indigo-500 hover:to-emerald-400 text-white shadow-lg shadow-indigo-500/25 transition transform active:scale-95">
+          Unlock Journal
+        </button>
+      </form>
+
+      <div class="pt-2 border-t border-borderSubtle text-[11px] text-slate-500">
+        🔒 100% Client-Side Encryption. Your data is stored only in your browser & Google Drive.
+      </div>
+    </div>
+  </div>
+
   <!-- Top Announcement / 100-Trade Milestone Banner -->
   <aside aria-label="Milestone Progress" class="bg-gradient-to-r from-indigo-950/80 via-slate-900 to-slate-950 border-b border-indigo-900/40 px-4 py-2 text-xs">
     <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
@@ -128,6 +173,11 @@
           <i data-lucide="sun" id="theme-icon-sun" class="w-4 h-4 text-amber-400"></i>
           <i data-lucide="moon" id="theme-icon-moon" class="w-4 h-4 text-indigo-400 hidden"></i>
           <span id="theme-label" class="hidden sm:inline">Theme</span>
+        </button>
+
+        <!-- Lock Button -->
+        <button id="btn-lock-journal" class="p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition" title="Lock Journal">
+          <i data-lucide="lock" class="w-4 h-4"></i>
         </button>
 
         <!-- Quick Settings -->
@@ -866,6 +916,19 @@
           <div>
             <label class="block text-slate-400 mb-1">Starting Account Balance ($)</label>
             <input id="setting-initial-balance" type="number" step="any" value="10000" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white" />
+          </div>
+        </div>
+
+        <!-- Master Passcode Security -->
+        <div class="space-y-3 pb-4 border-b border-borderSubtle">
+          <h4 class="font-bold text-white uppercase text-xs tracking-wider flex items-center space-x-1.5">
+            <i data-lucide="key" class="w-4 h-4 text-indigo-400"></i>
+            <span>Master Passcode Protection</span>
+          </h4>
+          <p class="text-slate-400">Change your master passcode or disable passcode lock.</p>
+          <div class="flex space-x-2">
+            <input id="setting-new-passcode" type="password" placeholder="Enter new PIN / Passcode" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white" />
+            <button id="btn-save-new-passcode" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white">Update PIN</button>
           </div>
         </div>
 
