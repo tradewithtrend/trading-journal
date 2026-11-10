@@ -1,10 +1,53 @@
-/* Custom Styling for 100-Trade Journal */
+/* Custom Styling for 100-Trade Journal (Light & Dark Theme Engine) */
 
 :root {
+  /* Common Accent Colors */
   --color-win: #10B981;
   --color-loss: #EF4444;
-  --color-be: #94A3B8;
+  --color-be: #64748B;
   --color-accent: #6366F1;
+
+  /* LIGHT THEME (White / Clean Slate) */
+  --bg-main: #F8FAFC;
+  --bg-card: #FFFFFF;
+  --bg-subtle: #F1F5F9;
+  --bg-input: #FFFFFF;
+  --border-subtle: #E2E8F0;
+  --border-input: #CBD5E1;
+  --text-main: #0F172A;
+  --text-muted: #64748B;
+  --text-subtle: #94A3B8;
+  --table-header: #F1F5F9;
+  --table-hover: #F8FAFC;
+  --chip-bg: #F1F5F9;
+  --chip-border: #E2E8F0;
+  --chip-text: #334155;
+  --dropzone-bg: #F8FAFC;
+  --dropzone-border: #CBD5E1;
+  --modal-header: #F8FAFC;
+  --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+}
+
+html.dark {
+  /* DARK THEME (Bloomberg / TradingView Aesthetic) */
+  --bg-main: #0B0F19;
+  --bg-card: #131B2E;
+  --bg-subtle: #0F172A;
+  --bg-input: #090D16;
+  --border-subtle: #1F293D;
+  --border-input: #334155;
+  --text-main: #F8FAFC;
+  --text-muted: #94A3B8;
+  --text-subtle: #64748B;
+  --table-header: rgba(15, 23, 42, 0.8);
+  --table-hover: rgba(30, 41, 59, 0.45);
+  --chip-bg: #0F172A;
+  --chip-border: #1F293D;
+  --chip-text: #94A3B8;
+  --dropzone-bg: rgba(15, 23, 42, 0.6);
+  --dropzone-border: #1E293B;
+  --modal-header: rgba(15, 23, 42, 0.9);
+  --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
 }
 
 /* Custom Scrollbar */
@@ -14,27 +57,96 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #0B0F19;
+  background: var(--bg-main);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1F293D;
+  background: var(--border-subtle);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #374151;
+  background: var(--text-subtle);
+}
+
+/* Base Body Application */
+body {
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* Glassmorphism & Card Glow */
 .kpi-card {
+  background-color: var(--bg-card);
+  border-color: var(--border-subtle);
+  box-shadow: var(--card-shadow);
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .kpi-card:hover {
   transform: translateY(-2px);
   border-color: rgba(99, 102, 241, 0.35);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 15px 0 rgba(99, 102, 241, 0.1);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 0 15px 0 rgba(99, 102, 241, 0.1);
+}
+
+/* Light Mode Overrides for text & inputs */
+html:not(.dark) .text-white {
+  color: #0F172A !important;
+}
+
+html:not(.dark) .text-slate-100 {
+  color: #0F172A !important;
+}
+
+html:not(.dark) .text-slate-200 {
+  color: #1E293B !important;
+}
+
+html:not(.dark) .text-slate-300 {
+  color: #334155 !important;
+}
+
+html:not(.dark) .text-slate-400 {
+  color: #64748B !important;
+}
+
+html:not(.dark) .bg-slate-900,
+html:not(.dark) .bg-slate-900\/80,
+html:not(.dark) .bg-slate-900\/90,
+html:not(.dark) .bg-slate-900\/60,
+html:not(.dark) .bg-slate-900\/40 {
+  background-color: #F1F5F9 !important;
+  color: #0F172A;
+}
+
+html:not(.dark) .bg-slate-950 {
+  background-color: #FFFFFF !important;
+  border-color: #CBD5E1 !important;
+  color: #0F172A !important;
+}
+
+html:not(.dark) .bg-slate-800 {
+  background-color: #E2E8F0 !important;
+  color: #334155 !important;
+}
+
+html:not(.dark) .border-slate-700,
+html:not(.dark) .border-slate-800 {
+  border-color: #CBD5E1 !important;
+}
+
+html:not(.dark) input,
+html:not(.dark) select,
+html:not(.dark) textarea {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+  border-color: #CBD5E1 !important;
+}
+
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder {
+  color: #94A3B8 !important;
 }
 
 /* Interactive Chip Buttons */
@@ -46,9 +158,9 @@
   font-size: 0.75rem;
   font-weight: 600;
   border-radius: 0.75rem;
-  border: 1px solid #1F293D;
-  background-color: #0F172A;
-  color: #94A3B8;
+  border: 1px solid var(--chip-border);
+  background-color: var(--chip-bg);
+  color: var(--chip-text);
   cursor: pointer;
   user-select: none;
   transition: all 0.15s ease-in-out;
@@ -56,123 +168,191 @@
 }
 
 .chip-btn:hover {
-  border-color: #334155;
-  color: #F8FAFC;
-  background-color: #1E293B;
+  border-color: #6366F1;
+  color: var(--text-main);
+  background-color: var(--bg-card);
 }
 
 .chip-btn.active {
   border-color: #6366F1;
-  background-color: rgba(99, 102, 241, 0.2);
+  background-color: rgba(99, 102, 241, 0.15);
+  color: #4F46E5;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.15);
+}
+
+html.dark .chip-btn.active {
   color: #A5B4FC;
-  box-shadow: 0 0 10px rgba(99, 102, 241, 0.25);
+  background-color: rgba(99, 102, 241, 0.2);
 }
 
 /* Specialized Chip Active Styles */
 .chip-win.active {
   border-color: #10B981;
-  background-color: rgba(16, 185, 129, 0.2);
+  background-color: rgba(16, 185, 129, 0.18);
+  color: #059669;
+}
+
+html.dark .chip-win.active {
   color: #34D399;
+  background-color: rgba(16, 185, 129, 0.2);
 }
 
 .chip-loss.active {
   border-color: #EF4444;
-  background-color: rgba(239, 68, 68, 0.2);
+  background-color: rgba(239, 68, 68, 0.18);
+  color: #DC2626;
+}
+
+html.dark .chip-loss.active {
   color: #F87171;
+  background-color: rgba(239, 68, 68, 0.2);
 }
 
 .chip-be.active {
-  border-color: #94A3B8;
-  background-color: rgba(148, 163, 184, 0.2);
+  border-color: #64748B;
+  background-color: rgba(148, 163, 184, 0.18);
+  color: #334155;
+}
+
+html.dark .chip-be.active {
   color: #E2E8F0;
+  background-color: rgba(148, 163, 184, 0.2);
 }
 
 .chip-long.active {
   border-color: #10B981;
-  background-color: rgba(16, 185, 129, 0.2);
+  background-color: rgba(16, 185, 129, 0.18);
+  color: #059669;
+}
+
+html.dark .chip-long.active {
   color: #34D399;
+  background-color: rgba(16, 185, 129, 0.2);
 }
 
 .chip-short.active {
   border-color: #EF4444;
-  background-color: rgba(239, 68, 68, 0.2);
+  background-color: rgba(239, 68, 68, 0.18);
+  color: #DC2626;
+}
+
+html.dark .chip-short.active {
   color: #F87171;
+  background-color: rgba(239, 68, 68, 0.2);
 }
 
 .chip-mistake.active {
   border-color: #F59E0B;
-  background-color: rgba(245, 158, 11, 0.2);
+  background-color: rgba(245, 158, 11, 0.18);
+  color: #D97706;
+}
+
+html.dark .chip-mistake.active {
   color: #FCD34D;
+  background-color: rgba(245, 158, 11, 0.2);
 }
 
 .chip-emotion.active {
   border-color: #A855F7;
-  background-color: rgba(168, 85, 247, 0.2);
+  background-color: rgba(168, 85, 247, 0.18);
+  color: #7E22CE;
+}
+
+html.dark .chip-emotion.active {
   color: #D8B4FE;
+  background-color: rgba(168, 85, 247, 0.2);
 }
 
 /* Screenshot Dropzone */
 .paste-dropzone {
-  border: 2px dashed #1E293B;
+  border: 2px dashed var(--dropzone-border);
   border-radius: 1rem;
-  background-color: rgba(15, 23, 42, 0.6);
+  background-color: var(--dropzone-bg);
   transition: all 0.2s ease;
   cursor: pointer;
 }
 
 .paste-dropzone:hover, .paste-dropzone.dragover {
   border-color: #6366F1;
-  background-color: rgba(99, 102, 241, 0.08);
+  background-color: rgba(99, 102, 241, 0.06);
 }
 
 .paste-dropzone.has-image {
   border-style: solid;
-  border-color: #334155;
-  background-color: #0F172A;
+  border-color: var(--border-subtle);
+  background-color: var(--bg-card);
 }
 
 /* Direction Badges */
 .badge-long {
   background-color: rgba(16, 185, 129, 0.15);
-  color: #34D399;
+  color: #059669;
   border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+html.dark .badge-long {
+  color: #34D399;
 }
 
 .badge-short {
   background-color: rgba(239, 68, 68, 0.15);
-  color: #F87171;
+  color: #DC2626;
   border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+html.dark .badge-short {
+  color: #F87171;
 }
 
 /* Outcome Badges */
 .badge-outcome-win {
   background-color: rgba(16, 185, 129, 0.15);
-  color: #10B981;
+  color: #059669;
   border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+html.dark .badge-outcome-win {
+  color: #10B981;
 }
 
 .badge-outcome-loss {
   background-color: rgba(239, 68, 68, 0.15);
-  color: #EF4444;
+  color: #DC2626;
   border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+html.dark .badge-outcome-loss {
+  color: #EF4444;
 }
 
 .badge-outcome-be {
   background-color: rgba(148, 163, 184, 0.15);
-  color: #94A3B8;
+  color: #475569;
   border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+html.dark .badge-outcome-be {
+  color: #94A3B8;
 }
 
 .badge-outcome-open {
   background-color: rgba(59, 130, 246, 0.15);
-  color: #60A5FA;
+  color: #2563EB;
   border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+html.dark .badge-outcome-open {
+  color: #60A5FA;
 }
 
 .badge-outcome-missed {
   background-color: rgba(245, 158, 11, 0.15);
-  color: #FBBF24;
+  color: #D97706;
   border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+html.dark .badge-outcome-missed {
+  color: #FBBF24;
 }
 
 /* Toast Animation */
@@ -191,13 +371,23 @@
   animation: slideInUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Pulse animation for active paste area */
-@keyframes pulsePaste {
-  0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
-  70% { box-shadow: 0 0 0 8px rgba(99, 102, 241, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+/* Light Theme Milestone Banner */
+html:not(.dark) aside[aria-label="Milestone Progress"] {
+  background: linear-gradient(to right, #EEF2FF, #F8FAFC, #F0FDF4) !important;
+  border-bottom-color: #E2E8F0 !important;
+  color: #334155 !important;
 }
 
-.paste-active {
-  animation: pulsePaste 2s infinite;
+html:not(.dark) aside[aria-label="Milestone Progress"] .text-slate-300 {
+  color: #334155 !important;
+}
+
+html:not(.dark) aside[aria-label="Milestone Progress"] .bg-slate-800 {
+  background-color: #E2E8F0 !important;
+  border-color: #CBD5E1 !important;
+}
+
+/* Table Hover in Light Mode */
+html:not(.dark) tbody tr:hover {
+  background-color: #F8FAFC !important;
 }

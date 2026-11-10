@@ -6,8 +6,10 @@
 const TradeApp = (function() {
   const STORAGE_KEY_TRADES = '100_trades_journal_trades';
   const STORAGE_KEY_SETTINGS = '100_trades_journal_settings';
+  const STORAGE_KEY_THEME = 'trading_journal_theme';
 
   let trades = [];
+  let currentTheme = localStorage.getItem(STORAGE_KEY_THEME) || 'dark';
   let settings = {
     initialBalance: 10000,
     maxRiskPct: 1.0,
@@ -34,12 +36,55 @@ const TradeApp = (function() {
 
   // Initialize
   function init() {
+    initTheme();
     loadSettings();
     loadTrades();
     bindEvents();
     bindPasteAndUpload();
     GoogleDriveSync.init();
     renderAll();
+  }
+
+  // Theme Management (Dark & White / Light theme)
+  function initTheme() {
+    applyTheme(currentTheme, false);
+  }
+
+  function applyTheme(theme, notify = true) {
+    currentTheme = theme;
+    const isDark = theme === 'dark';
+    document.documentElement.classList.toggle('dark', isDark);
+    localStorage.setItem(STORAGE_KEY_THEME, theme);
+
+    // Update icons & label
+    const sunIcon = document.getElementById('theme-icon-sun');
+    const moonIcon = document.getElementById('theme-icon-moon');
+    const label = document.getElementById('theme-label');
+
+    if (sunIcon && moonIcon) {
+      if (isDark) {
+        sunIcon.classList.remove('hidden');
+        moonIcon.classList.add('hidden');
+        if (label) label.textContent = 'Light Mode';
+      } else {
+        sunIcon.classList.add('hidden');
+        moonIcon.classList.remove('hidden');
+        if (label) label.textContent = 'Dark Mode';
+      }
+    }
+
+    if (notify) {
+      GoogleDriveSync.showToast(`Switched to ${isDark ? 'Dark' : 'White'} theme!`, 'info');
+    }
+
+    // Re-render charts with matching colors
+    renderCharts();
+    lucide.createIcons();
+  }
+
+  function toggleTheme() {
+    const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    applyTheme(nextTheme, true);
   }
 
   function loadSettings() {
@@ -452,6 +497,14 @@ const TradeApp = (function() {
     const ctx = canvas.getContext('2d');
     if (equityChart) equityChart.destroy();
 
+    const isDark = document.documentElement.classList.contains('dark');
+    const gridColor = isDark ? '#1E293B' : '#E2E8F0';
+    const tickColor = isDark ? '#64748B' : '#475569';
+    const tooltipBg = isDark ? '#0F172A' : '#FFFFFF';
+    const tooltipTitle = isDark ? '#F8FAFC' : '#0F172A';
+    const tooltipBody = isDark ? '#94A3B8' : '#334155';
+    const tooltipBorder = isDark ? '#334155' : '#CBD5E1';
+
     const closed = trades.filter(t => !t.isMissed && t.outcome !== 'OPEN');
     closed.sort((a, b) => (parseInt(a.tradeNum, 10) || 0) - (parseInt(b.tradeNum, 10) || 0));
 
@@ -473,7 +526,7 @@ const TradeApp = (function() {
     const lineColor = isProfitable ? '#10B981' : '#EF4444';
     const gradient = ctx.createLinearGradient(0, 0, 0, 300);
     gradient.addColorStop(0, isProfitable ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)');
-    gradient.addColorStop(1, 'rgba(11, 15, 25, 0)');
+    gradient.addColorStop(1, isDark ? 'rgba(11, 15, 25, 0)' : 'rgba(248, 250, 252, 0)');
 
     equityChart = new Chart(ctx, {
       type: 'line',
@@ -485,7 +538,7 @@ const TradeApp = (function() {
           borderColor: lineColor,
           borderWidth: 2.5,
           pointBackgroundColor: lineColor,
-          pointBorderColor: '#131B2E',
+          pointBorderColor: isDark ? '#131B2E' : '#FFFFFF',
           pointRadius: pnlData.length > 50 ? 2 : 4,
           pointHoverRadius: 6,
           fill: true,
@@ -499,10 +552,10 @@ const TradeApp = (function() {
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#0F172A',
-            titleColor: '#F8FAFC',
-            bodyColor: '#94A3B8',
-            borderColor: '#334155',
+            backgroundColor: tooltipBg,
+            titleColor: tooltipTitle,
+            bodyColor: tooltipBody,
+            borderColor: tooltipBorder,
             borderWidth: 1,
             callbacks: {
               label: function(context) {
@@ -514,11 +567,11 @@ const TradeApp = (function() {
           }
         },
         scales: {
-          x: { grid: { color: '#1E293B' }, ticks: { color: '#64748B', font: { size: 10 } } },
+          x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 10 } } },
           y: {
-            grid: { color: '#1E293B' },
+            grid: { color: gridColor },
             ticks: {
-              color: '#64748B',
+              color: tickColor,
               font: { size: 10 },
               callback: function(value) {
                 return chartMode === 'r' ? `${value}R` : `$${value}`;
@@ -535,6 +588,10 @@ const TradeApp = (function() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (strategyChart) strategyChart.destroy();
+
+    const isDark = document.documentElement.classList.contains('dark');
+    const gridColor = isDark ? '#1E293B' : '#E2E8F0';
+    const tickColor = isDark ? '#94A3B8' : '#334155';
 
     const stratMap = {};
     trades.filter(t => !t.isMissed).forEach(t => {
@@ -564,8 +621,8 @@ const TradeApp = (function() {
         maintainAspectRatio: false,
         plugins: { legend: { display: false } },
         scales: {
-          x: { grid: { color: '#1E293B' }, ticks: { color: '#64748B', font: { size: 9 } } },
-          y: { grid: { display: false }, ticks: { color: '#94A3B8', font: { size: 10 } } }
+          x: { grid: { color: gridColor }, ticks: { color: '#64748B', font: { size: 9 } } },
+          y: { grid: { display: false }, ticks: { color: tickColor, font: { size: 10 } } }
         }
       }
     });
@@ -576,6 +633,10 @@ const TradeApp = (function() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (disciplineChart) disciplineChart.destroy();
+
+    const isDark = document.documentElement.classList.contains('dark');
+    const gridColor = isDark ? '#1E293B' : '#E2E8F0';
+    const tickColor = isDark ? '#CBD5E1' : '#0F172A';
 
     let planYesPnL = 0;
     let planNoPnL = 0;
@@ -603,8 +664,8 @@ const TradeApp = (function() {
         maintainAspectRatio: false,
         plugins: { legend: { display: false } },
         scales: {
-          x: { grid: { display: false }, ticks: { color: '#CBD5E1', font: { size: 10 } } },
-          y: { grid: { color: '#1E293B' }, ticks: { color: '#64748B', font: { size: 9 } } }
+          x: { grid: { display: false }, ticks: { color: tickColor, font: { size: 10 } } },
+          y: { grid: { color: gridColor }, ticks: { color: '#64748B', font: { size: 9 } } }
         }
       }
     });
@@ -615,6 +676,10 @@ const TradeApp = (function() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (marketChart) marketChart.destroy();
+
+    const isDark = document.documentElement.classList.contains('dark');
+    const legendColor = isDark ? '#94A3B8' : '#334155';
+    const borderColor = isDark ? '#131B2E' : '#FFFFFF';
 
     const emotions = {};
     trades.forEach(t => {
@@ -632,7 +697,7 @@ const TradeApp = (function() {
         datasets: [{
           data: data.length ? data : [1],
           backgroundColor: ['#10B981', '#6366F1', '#A855F7', '#F59E0B', '#EF4444', '#38BDF8'],
-          borderColor: '#131B2E',
+          borderColor: borderColor,
           borderWidth: 2
         }]
       },
@@ -642,7 +707,7 @@ const TradeApp = (function() {
         plugins: {
           legend: {
             position: 'right',
-            labels: { color: '#94A3B8', font: { size: 10 } }
+            labels: { color: legendColor, font: { size: 10 } }
           }
         }
       }
@@ -1150,6 +1215,12 @@ const TradeApp = (function() {
     document.getElementById('btn-load-samples').addEventListener('click', () => {
       if (confirm('Load demo trades to preview analytics?')) loadDemoTrades();
     });
+
+    // Theme Toggle Button
+    const themeBtn = document.getElementById('btn-toggle-theme');
+    if (themeBtn) {
+      themeBtn.addEventListener('click', toggleTheme);
+    }
 
     // Empty state
     const emptyAdd = document.getElementById('btn-empty-add-trade');

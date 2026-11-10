@@ -32,9 +32,9 @@
               dark: '#DC2626',
               bg: 'rgba(239, 68, 68, 0.12)'
             },
-            darkBg: '#0B0F19',
-            cardBg: '#131B2E',
-            borderSubtle: '#1F293D'
+            darkBg: 'var(--bg-main)',
+            cardBg: 'var(--bg-card)',
+            borderSubtle: 'var(--border-subtle)'
           }
         }
       }
@@ -121,6 +121,13 @@
         <button id="btn-open-new-trade" class="flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg shadow-emerald-500/25 transition-all transform active:scale-95">
           <i data-lucide="plus-circle" class="w-4 h-4"></i>
           <span>Log Trade</span>
+        </button>
+
+        <!-- Theme Toggle Button (Light & Dark Mode) -->
+        <button id="btn-toggle-theme" class="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 border border-slate-700 hover:border-slate-600 transition text-slate-300" title="Switch Theme (Light / Dark)">
+          <i data-lucide="sun" id="theme-icon-sun" class="w-4 h-4 text-amber-400"></i>
+          <i data-lucide="moon" id="theme-icon-moon" class="w-4 h-4 text-indigo-400 hidden"></i>
+          <span id="theme-label" class="hidden sm:inline">Theme</span>
         </button>
 
         <!-- Quick Settings -->
