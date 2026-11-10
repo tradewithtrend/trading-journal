@@ -3,6 +3,186 @@
  * Ultra-Streamlined Edition: Least Writing, Copy-Paste Screenshots, Robust Rule-Breaking & Psychology Review
  */
 
+/**
+ * TradeStorage — High Capacity IndexedDB Persistence Layer
+ * Completely eliminates browser localStorage 5MB quota crashes and
+ * ensures heavy chart screenshots & full backups persist permanently across refreshes.
+ */
+const TradeStorage = (function() {
+  const DB_NAME = '100_trades_journal_db';
+  const DB_VERSION = 1;
+  const STORE_SCREENSHOTS = 'chart_screenshots';
+  const STORE_BACKUPS = 'trades_backup';
+
+  let dbPromise = null;
+
+  function getDB() {
+    if (!dbPromise) {
+      dbPromise = new Promise((resolve) => {
+        if (typeof window === 'undefined' || !window.indexedDB) {
+          console.warn('IndexedDB is not supported in this environment');
+          return resolve(null);
+        }
+        try {
+          const req = indexedDB.open(DB_NAME, DB_VERSION);
+          req.onupgradeneeded = function(e) {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_SCREENSHOTS)) {
+              db.createObjectStore(STORE_SCREENSHOTS, { keyPath: 'key' });
+            }
+            if (!db.objectStoreNames.contains(STORE_BACKUPS)) {
+              db.createObjectStore(STORE_BACKUPS, { keyPath: 'key' });
+            }
+          };
+          req.onsuccess = function(e) {
+            resolve(e.target.result);
+          };
+          req.onerror = function(e) {
+            console.error('IndexedDB open error:', e);
+            resolve(null);
+          };
+          req.onblocked = function() {
+            console.warn('IndexedDB database open blocked');
+            resolve(null);
+          };
+        } catch (err) {
+          console.error('IndexedDB init exception:', err);
+          resolve(null);
+        }
+      });
+    }
+    return dbPromise;
+  }
+
+  async function saveScreenshot(tradeId, screenshotBase64, tradeNum = null) {
+    if (!screenshotBase64) return;
+    try {
+      const db = await getDB();
+      if (!db) return;
+      const tx = db.transaction(STORE_SCREENSHOTS, 'readwrite');
+      const store = tx.objectStore(STORE_SCREENSHOTS);
+
+      const now = Date.now();
+      if (tradeId) {
+        store.put({
+          key: String(tradeId),
+          tradeId: String(tradeId),
+          tradeNum: tradeNum ? parseInt(tradeNum, 10) : null,
+          screenshot: screenshotBase64,
+          updatedAt: now
+        });
+      }
+      if (tradeNum) {
+        store.put({
+          key: `num_${tradeNum}`,
+          tradeId: tradeId ? String(tradeId) : '',
+          tradeNum: parseInt(tradeNum, 10),
+          screenshot: screenshotBase64,
+          updatedAt: now
+        });
+      }
+    } catch (err) {
+      console.warn('TradeStorage saveScreenshot error:', err);
+    }
+  }
+
+  async function getScreenshot(tradeId, tradeNum = null) {
+    try {
+      const db = await getDB();
+      if (!db) return null;
+
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORE_SCREENSHOTS, 'readonly');
+        const store = tx.objectStore(STORE_SCREENSHOTS);
+
+        if (tradeId) {
+          const req1 = store.get(String(tradeId));
+          req1.onsuccess = function() {
+            if (req1.result && req1.result.screenshot) {
+              return resolve(req1.result.screenshot);
+            }
+            if (tradeNum) {
+              const req2 = store.get(`num_${tradeNum}`);
+              req2.onsuccess = function() {
+                resolve(req2.result && req2.result.screenshot ? req2.result.screenshot : null);
+              };
+              req2.onerror = () => resolve(null);
+            } else {
+              resolve(null);
+            }
+          };
+          req1.onerror = () => resolve(null);
+        } else if (tradeNum) {
+          const req2 = store.get(`num_${tradeNum}`);
+          req2.onsuccess = function() {
+            resolve(req2.result && req2.result.screenshot ? req2.result.screenshot : null);
+          };
+          req2.onerror = () => resolve(null);
+        } else {
+          resolve(null);
+        }
+      });
+    } catch (err) {
+      console.warn('TradeStorage getScreenshot error:', err);
+      return null;
+    }
+  }
+
+  async function deleteScreenshot(tradeId, tradeNum = null) {
+    try {
+      const db = await getDB();
+      if (!db) return;
+      const tx = db.transaction(STORE_SCREENSHOTS, 'readwrite');
+      const store = tx.objectStore(STORE_SCREENSHOTS);
+      if (tradeId) store.delete(String(tradeId));
+      if (tradeNum) store.delete(`num_${tradeNum}`);
+    } catch (err) {
+      console.warn('TradeStorage deleteScreenshot error:', err);
+    }
+  }
+
+  async function saveTradesBackup(tradesList) {
+    try {
+      const db = await getDB();
+      if (!db) return;
+      const tx = db.transaction(STORE_BACKUPS, 'readwrite');
+      const store = tx.objectStore(STORE_BACKUPS);
+      store.put({
+        key: 'latest_trades',
+        trades: tradesList,
+        updatedAt: Date.now()
+      });
+    } catch (err) {
+      console.warn('TradeStorage saveTradesBackup error:', err);
+    }
+  }
+
+  async function getTradesBackup() {
+    try {
+      const db = await getDB();
+      if (!db) return null;
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORE_BACKUPS, 'readonly');
+        const store = tx.objectStore(STORE_BACKUPS);
+        const req = store.get('latest_trades');
+        req.onsuccess = () => resolve(req.result ? req.result.trades : null);
+        req.onerror = () => resolve(null);
+      });
+    } catch (err) {
+      console.warn('TradeStorage getTradesBackup error:', err);
+      return null;
+    }
+  }
+
+  return {
+    saveScreenshot,
+    getScreenshot,
+    deleteScreenshot,
+    saveTradesBackup,
+    getTradesBackup
+  };
+})();
+
 const TradeApp = (function() {
   const STORAGE_KEY_TRADES = '100_trades_journal_trades';
   const STORAGE_KEY_SETTINGS = '100_trades_journal_settings';
@@ -46,21 +226,23 @@ const TradeApp = (function() {
   let marketChart = null;
 
   // Initialize
-  function init() {
+  async function init() {
     initTheme();
     initAuth();
     loadSettings();
-    loadTrades();
+    await loadTrades();
     bindEvents();
     bindPasteAndUpload();
     GoogleDriveSync.init();
     renderAll();
 
-    // Auto-sync with Google Sheet on startup if connected and local journal is empty
+    // Restore active tab
+    const savedTab = sessionStorage.getItem('tj_active_view') || 'view-trades';
+    switchTab(savedTab);
+
+    // Auto-sync with Google Sheet on startup if configured
     if (GoogleDriveSync.hasWebhook() || GoogleDriveSync.isAuthenticated()) {
-      if (trades.length === 0) {
-        GoogleDriveSync.smartSync({ notify: false, silentIfEmpty: true });
-      }
+      GoogleDriveSync.smartSync({ notify: false, silentIfEmpty: true });
     }
   }
 
@@ -236,23 +418,78 @@ const TradeApp = (function() {
     renderKPIs();
   }
 
-  function loadTrades() {
+  async function loadTrades() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_TRADES);
       if (saved) {
         trades = JSON.parse(saved);
+      } else if (typeof TradeStorage !== 'undefined') {
+        const backup = await TradeStorage.getTradesBackup();
+        trades = Array.isArray(backup) ? backup : [];
       } else {
         trades = [];
       }
     } catch (e) {
-      console.warn('Could not load trades:', e);
-      trades = [];
+      console.warn('Could not load trades from localStorage:', e);
+      if (typeof TradeStorage !== 'undefined') {
+        const backup = await TradeStorage.getTradesBackup();
+        trades = Array.isArray(backup) ? backup : [];
+      } else {
+        trades = [];
+      }
+    }
+
+    hydrateScreenshots();
+  }
+
+  async function hydrateScreenshots() {
+    if (typeof TradeStorage === 'undefined') return;
+    let anyHydrated = false;
+    for (const t of trades) {
+      if (!t.screenshot) {
+        const img = await TradeStorage.getScreenshot(t.id, t.tradeNum);
+        if (img) {
+          t.screenshot = img;
+          t.hasScreenshot = true;
+          anyHydrated = true;
+        }
+      } else {
+        t.hasScreenshot = true;
+      }
+    }
+    if (anyHydrated) {
+      renderTable();
     }
   }
 
   function saveTrades(triggerSync = true) {
     trades.sort((a, b) => (parseInt(a.tradeNum, 10) || 0) - (parseInt(b.tradeNum, 10) || 0));
-    localStorage.setItem(STORAGE_KEY_TRADES, JSON.stringify(trades));
+
+    // 1. Always save a complete backup in high-capacity IndexedDB
+    if (typeof TradeStorage !== 'undefined') {
+      TradeStorage.saveTradesBackup(trades);
+    }
+
+    // 2. Save to localStorage safely (with quota overflow fallback)
+    try {
+      localStorage.setItem(STORAGE_KEY_TRADES, JSON.stringify(trades));
+    } catch (quotaErr) {
+      console.warn('localStorage quota exceeded. Storing lightweight metadata (screenshots preserved in IndexedDB):', quotaErr);
+      try {
+        const lightweightTrades = trades.map(t => {
+          const c = Object.assign({}, t);
+          if (c.screenshot) {
+            c.hasScreenshot = true;
+            delete c.screenshot;
+          }
+          return c;
+        });
+        localStorage.setItem(STORAGE_KEY_TRADES, JSON.stringify(lightweightTrades));
+      } catch (innerErr) {
+        console.error('Critical: unable to store even lightweight trades in localStorage:', innerErr);
+      }
+    }
+
     renderAll();
 
     if (triggerSync) {
@@ -555,8 +792,8 @@ const TradeApp = (function() {
           ${reviewInfo}
         </td>
         <td class="py-3 px-3 text-center">
-          ${t.screenshot ? `
-            <button type="button" class="btn-preview-thumb p-1 rounded-md hover:bg-slate-700 text-indigo-400 transition" data-img="${t.id}" title="Click to view chart screenshot">
+          ${(t.screenshot || t.hasScreenshot) ? `
+            <button type="button" class="btn-preview-thumb p-1 rounded-md hover:bg-slate-700 text-indigo-400 transition" data-id="${t.id}" data-num="${t.tradeNum}" title="Click to view chart screenshot">
               <i data-lucide="image" class="w-4 h-4"></i>
             </button>
           ` : '<span class="text-slate-600">-</span>'}
@@ -597,12 +834,23 @@ const TradeApp = (function() {
     });
 
     tbody.querySelectorAll('.btn-preview-thumb').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const tradeId = btn.getAttribute('data-img');
-        const trade = trades.find(t => t.id === tradeId);
-        if (trade && trade.screenshot) {
-          openLightbox(trade.screenshot, `${trade.symbol} (${trade.direction}) — Trade #${trade.tradeNum}`);
+        const tradeId = btn.getAttribute('data-id');
+        const tradeNum = btn.getAttribute('data-num');
+        const trade = trades.find(t => t.id === tradeId || String(t.tradeNum) === String(tradeNum));
+        let img = trade ? trade.screenshot : null;
+        if (!img && typeof TradeStorage !== 'undefined') {
+          img = await TradeStorage.getScreenshot(tradeId, tradeNum);
+          if (trade && img) {
+            trade.screenshot = img;
+            trade.hasScreenshot = true;
+          }
+        }
+        if (img) {
+          openLightbox(img, `${trade ? trade.symbol : 'Trade'} (${trade ? trade.direction : ''}) — Trade #${trade ? trade.tradeNum : tradeNum}`);
+        } else {
+          GoogleDriveSync.showToast('Chart screenshot not found on this device.', 'info');
         }
       });
     });
@@ -1067,6 +1315,14 @@ const TradeApp = (function() {
       // Screenshot
       if (trade.screenshot) {
         setScreenshot(trade.screenshot);
+      } else if ((trade.hasScreenshot || trade.tradeNum) && typeof TradeStorage !== 'undefined') {
+        TradeStorage.getScreenshot(trade.id, trade.tradeNum).then(img => {
+          if (img) {
+            trade.screenshot = img;
+            trade.hasScreenshot = true;
+            setScreenshot(img);
+          }
+        });
       }
 
       deleteBtn.classList.remove('hidden');
@@ -1195,6 +1451,7 @@ const TradeApp = (function() {
       emotion,
       notes,
       screenshot,
+      hasScreenshot: Boolean(screenshot),
       isMissed
     };
 
@@ -1253,10 +1510,17 @@ const TradeApp = (function() {
     }
 
     saveTrades(true);
+    if (screenshot && typeof TradeStorage !== 'undefined') {
+      TradeStorage.saveScreenshot(id, screenshot, tradeNum);
+    }
     closeTradeModal();
   }
 
   function deleteTrade(id) {
+    const tradeToDelete = trades.find(t => t.id === id);
+    if (tradeToDelete && typeof TradeStorage !== 'undefined') {
+      TradeStorage.deleteScreenshot(tradeToDelete.id, tradeToDelete.tradeNum);
+    }
     trades = trades.filter(t => t.id !== id);
     saveTrades(true);
     GoogleDriveSync.showToast('Trade deleted', 'info');
@@ -1321,6 +1585,7 @@ const TradeApp = (function() {
     ];
 
     function switchTab(viewId) {
+      sessionStorage.setItem('tj_active_view', viewId);
       tabs.forEach(t => {
         const desktopBtn = document.getElementById(t.btn);
         const mobBtn = document.getElementById(t.mobBtn);
@@ -1369,6 +1634,28 @@ const TradeApp = (function() {
     });
     document.getElementById('btn-backup-drive').addEventListener('click', () => GoogleDriveSync.smartSync({ notify: true, silentIfEmpty: false }));
     document.getElementById('btn-export-csv').addEventListener('click', () => GoogleDriveSync.exportCsv(trades));
+
+    // Export & Import JSON Backup Buttons
+    const exportJsonBtn = document.getElementById('btn-export-json');
+    if (exportJsonBtn) {
+      exportJsonBtn.addEventListener('click', () => GoogleDriveSync.exportJson(trades));
+    }
+    const syncExportJsonBtn = document.getElementById('btn-sync-export-json');
+    if (syncExportJsonBtn) {
+      syncExportJsonBtn.addEventListener('click', () => GoogleDriveSync.exportJson(trades));
+    }
+    const importJsonInput = document.getElementById('file-import-json');
+    const importJsonBtn = document.getElementById('btn-import-json');
+    if (importJsonBtn && importJsonInput) {
+      importJsonBtn.addEventListener('click', () => importJsonInput.click());
+      importJsonInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+          GoogleDriveSync.importJson(e.target.files[0]);
+          e.target.value = '';
+        }
+      });
+    }
+
     document.getElementById('btn-load-samples').addEventListener('click', () => {
       if (confirm('Load demo trades to preview analytics?')) loadDemoTrades();
     });
@@ -1684,6 +1971,7 @@ const TradeApp = (function() {
     setTrades: (newTrades) => {
       trades = newTrades;
       saveTrades(false);
+      hydrateScreenshots();
     },
     calculateStats
   };

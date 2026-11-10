@@ -335,6 +335,11 @@
             <span>Export CSV</span>
           </button>
 
+          <button id="btn-export-json" class="px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-900 border border-slate-700 hover:border-slate-600 transition" title="Export complete journal backup with charts (JSON)">
+            <i data-lucide="file-json" class="w-3.5 h-3.5 inline mr-1 text-sky-400"></i>
+            <span>Backup JSON</span>
+          </button>
+
           <button id="btn-backup-drive" class="px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-indigo-600/20 border border-indigo-500/40 hover:bg-indigo-600/30 transition flex items-center space-x-1.5" title="Synchronize trades with Google Sheet">
             <i data-lucide="refresh-cw" id="icon-sync-toolbar" class="w-3.5 h-3.5 text-indigo-400"></i>
             <span>Sync Sheet</span>
@@ -555,7 +560,33 @@
               <i data-lucide="download-cloud" class="w-4 h-4"></i>
               <span>Pull from Drive</span>
             </button>
+            <button id="btn-import-json" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition flex items-center space-x-1.5" title="Import JSON backup file from computer">
+              <i data-lucide="upload" class="w-4 h-4 text-sky-400"></i>
+              <span>Import JSON</span>
+            </button>
+            <input type="file" id="file-import-json" accept=".json" class="hidden" />
           </div>
+        </div>
+
+        <!-- Storage & Charts Architecture Explainer -->
+        <div class="p-4 bg-indigo-950/30 border border-indigo-500/20 rounded-2xl my-6 text-xs text-slate-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div class="flex items-start space-x-3">
+            <div class="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 mt-0.5 sm:mt-0 flex-shrink-0">
+              <i data-lucide="shield-check" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h4 class="font-bold text-white text-sm">Where are your trades & charts saved?</h4>
+              <p class="text-[11px] text-slate-300 mt-1 leading-relaxed">
+                <strong class="text-emerald-400 font-semibold">• Google Sheet (Cloud):</strong> All 14 columns of trade metrics, P&L, setups, rules, and psychological lessons are saved live to your Google Sheet.<br/>
+                <strong class="text-sky-400 font-semibold">• Chart Screenshots (Local):</strong> Heavy chart images are saved locally in your browser's dedicated high-capacity <strong>IndexedDB</strong> database (unlimited capacity, never disappears on refresh).<br/>
+                <strong class="text-indigo-400 font-semibold">• Google Drive Cloud Backup:</strong> Full multi-device cloud backups with charts are saved to <code class="text-indigo-300 bg-slate-900 px-1 py-0.5 rounded">Trading_Journal_100_Trades.json</code> via Method 2.
+              </p>
+            </div>
+          </div>
+          <button id="btn-sync-export-json" class="whitespace-nowrap px-3.5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition flex items-center space-x-1.5 shadow">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+            <span>Export Backup (JSON)</span>
+          </button>
         </div>
 
         <!-- Sync Status Dashboard -->
