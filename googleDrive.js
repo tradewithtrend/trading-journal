@@ -17,14 +17,14 @@ const GoogleDriveSync = (function() {
   const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
   // Default Webhook URL (Bake your Google Apps Script URL here so ANY browser connects automatically!)
-  const DEFAULT_WEBHOOK_URL = '';
+  const DEFAULT_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbypofeTGIkqqx3_HstCLC5b3Ip0knZHQZs5PyD2-Wfn_hwad2HYww81mDbUsE4lweQ86A/exec';
 
   let tokenClient = null;
   let accessToken = localStorage.getItem(STORAGE_KEY_TOKEN) || null;
   let tokenExpiresAt = parseInt(localStorage.getItem(STORAGE_KEY_TOKEN_EXP) || '0', 10);
   let clientId = localStorage.getItem(STORAGE_KEY_CLIENT_ID) || '';
   let fileId = localStorage.getItem(STORAGE_KEY_FILE_ID) || null;
-  let webhookUrl = localStorage.getItem(STORAGE_KEY_WEBHOOK) || '';
+  let webhookUrl = localStorage.getItem(STORAGE_KEY_WEBHOOK) || DEFAULT_WEBHOOK_URL;
 
   // Initialize GIS Token Client
   function initClient() {
