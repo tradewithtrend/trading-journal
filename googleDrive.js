@@ -262,8 +262,34 @@ const GoogleDriveSync = (function() {
     return await res.json();
   }
 
-  // Pull / download data from Google Drive
+  // Pull / download data from Google Drive (Supports both Google Sheet Webhook and Drive OAuth)
   async function pullFromDrive() {
+    // 1. If using Google Sheet Webhook
+    if (webhookUrl) {
+      updateStatusUI('syncing', 'Pulling from Sheet...');
+      try {
+        const res = await fetch(webhookUrl);
+        const data = await res.json();
+        if (data && data.status === 'success' && Array.isArray(data.trades)) {
+          if (data.trades.length === 0) {
+            showToast('Your Google Sheet is currently empty.', 'info');
+          } else {
+            TradeApp.setTrades(data.trades);
+            showToast(`Restored ${data.trades.length} trades from Google Sheet!`, 'success');
+          }
+        } else {
+          showToast('Google Sheet returned: ' + (data?.message || 'No trades'), 'info');
+        }
+        updateStatusUI('connected', 'Sheet: Synced');
+      } catch (err) {
+        console.error('Error pulling from Sheet Webhook:', err);
+        showToast('Failed to pull from Google Sheet: ' + err.message, 'error');
+        updateStatusUI('error', 'Pull Error');
+      }
+      return;
+    }
+
+    // 2. If using OAuth Drive API
     if (!isAuthenticated()) {
       showToast('Please connect to Google Drive first.', 'error');
       connect();

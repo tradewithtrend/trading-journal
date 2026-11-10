@@ -90,8 +90,49 @@ function setupHeaders(sheet) {
 }
 
 function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "online",
-    message: "100 Trades Journal Google Sheet Webhook is active."
-  })).setMimeType(ContentService.MimeType.JSON);
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", trades: [] }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var lastCol = sheet.getLastColumn() || 14;
+    var data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+
+    var trades = data.map(function(row, idx) {
+      var isMissed = String(row[2]).toLowerCase().indexOf('missed') !== -1;
+      var mistakesStr = String(row[10] || '');
+      var mistakes = mistakesStr ? mistakesStr.split(';').map(function(s) { return s.trim(); }) : [];
+      var pnlVal = parseFloat(row[5]) || 0;
+      var rVal = parseFloat(row[6]) || 0;
+
+      return {
+        id: 'sheet_' + (idx + 1) + '_' + Date.now(),
+        tradeNum: parseInt(row[0]) || (idx + 1),
+        date: row[1] || '',
+        isMissed: isMissed,
+        symbol: String(row[3] || '').toUpperCase(),
+        direction: String(row[4] || 'LONG').toUpperCase(),
+        realizedPnL: !isMissed ? pnlVal : 0,
+        realizedR: !isMissed ? rVal : 0,
+        missedPnL: isMissed ? pnlVal : 0,
+        missedR: isMissed ? rVal : 0,
+        outcome: String(row[7] || (isMissed ? 'MISSED' : 'WIN')),
+        strategy: String(row[8] || 'Breakout & Retest'),
+        planFollowed: String(row[9]).toLowerCase().indexOf('yes') !== -1,
+        mistakes: mistakes,
+        emotion: String(row[11] || 'Calm & Patient'),
+        missedReason: String(row[12] || ''),
+        notes: String(row[13] || '')
+      };
+    });
+
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", trades: trades }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
 }
