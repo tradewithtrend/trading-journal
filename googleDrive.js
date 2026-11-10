@@ -332,7 +332,13 @@ const GoogleDriveSync = (function() {
                 if (localTrade.hasScreenshot && !remoteTrade.hasScreenshot) {
                   remoteTrade.hasScreenshot = localTrade.hasScreenshot;
                 }
+                if (localTrade.chartUrl && !remoteTrade.chartUrl) {
+                  remoteTrade.chartUrl = localTrade.chartUrl;
+                }
                 remoteTrade.id = localTrade.id || remoteTrade.id;
+              }
+              if (remoteTrade.chartUrl) {
+                remoteTrade.hasScreenshot = true;
               }
               // If still no screenshot, check IndexedDB
               if (!remoteTrade.screenshot && typeof TradeStorage !== 'undefined') {

@@ -847,10 +847,15 @@ const TradeApp = (function() {
             trade.hasScreenshot = true;
           }
         }
+        const driveUrl = trade ? (trade.chartUrl || '') : '';
         if (img) {
-          openLightbox(img, `${trade ? trade.symbol : 'Trade'} (${trade ? trade.direction : ''}) — Trade #${trade ? trade.tradeNum : tradeNum}`);
+          openLightbox(img, `${trade ? trade.symbol : 'Trade'} (${trade ? trade.direction : ''}) — Trade #${trade ? trade.tradeNum : tradeNum}`, driveUrl);
+        } else if (driveUrl) {
+          const fileIdMatch = driveUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+          const directImg = fileIdMatch ? `https://lh3.googleusercontent.com/d/${fileIdMatch[1]}` : driveUrl;
+          openLightbox(directImg, `${trade ? trade.symbol : 'Trade'} (${trade ? trade.direction : ''}) — Trade #${trade ? trade.tradeNum : tradeNum}`, driveUrl);
         } else {
-          GoogleDriveSync.showToast('Chart screenshot not found on this device.', 'info');
+          GoogleDriveSync.showToast('Chart screenshot not found.', 'info');
         }
       });
     });
@@ -1222,15 +1227,27 @@ const TradeApp = (function() {
   }
 
   // Lightbox Modal Controller
-  function openLightbox(imgSrc, caption = '') {
+  function openLightbox(imgSrc, caption = '', externalUrl = '') {
     const lightbox = document.getElementById('modal-lightbox');
     const imgEl = document.getElementById('lightbox-img');
     const capEl = document.getElementById('lightbox-caption');
+    const driveLink = document.getElementById('lightbox-drive-link');
 
     imgEl.src = imgSrc;
     capEl.textContent = caption;
+
+    if (driveLink) {
+      if (externalUrl) {
+        driveLink.href = externalUrl;
+        driveLink.classList.remove('hidden');
+      } else {
+        driveLink.classList.add('hidden');
+      }
+    }
+
     lightbox.classList.remove('hidden');
     lightbox.classList.add('flex');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
   function closeLightbox() {
