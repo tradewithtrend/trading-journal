@@ -37,13 +37,98 @@
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 15px 0 rgba(99, 102, 241, 0.1);
 }
 
-/* Table Row Hover & Animation */
-tbody tr {
-  transition: background-color 0.15s ease;
+/* Interactive Chip Buttons */
+.chip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  border: 1px solid #1F293D;
+  background-color: #0F172A;
+  color: #94A3B8;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease-in-out;
+  white-space: nowrap;
 }
 
-tbody tr:hover {
-  background-color: rgba(30, 41, 59, 0.45);
+.chip-btn:hover {
+  border-color: #334155;
+  color: #F8FAFC;
+  background-color: #1E293B;
+}
+
+.chip-btn.active {
+  border-color: #6366F1;
+  background-color: rgba(99, 102, 241, 0.2);
+  color: #A5B4FC;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.25);
+}
+
+/* Specialized Chip Active Styles */
+.chip-win.active {
+  border-color: #10B981;
+  background-color: rgba(16, 185, 129, 0.2);
+  color: #34D399;
+}
+
+.chip-loss.active {
+  border-color: #EF4444;
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #F87171;
+}
+
+.chip-be.active {
+  border-color: #94A3B8;
+  background-color: rgba(148, 163, 184, 0.2);
+  color: #E2E8F0;
+}
+
+.chip-long.active {
+  border-color: #10B981;
+  background-color: rgba(16, 185, 129, 0.2);
+  color: #34D399;
+}
+
+.chip-short.active {
+  border-color: #EF4444;
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #F87171;
+}
+
+.chip-mistake.active {
+  border-color: #F59E0B;
+  background-color: rgba(245, 158, 11, 0.2);
+  color: #FCD34D;
+}
+
+.chip-emotion.active {
+  border-color: #A855F7;
+  background-color: rgba(168, 85, 247, 0.2);
+  color: #D8B4FE;
+}
+
+/* Screenshot Dropzone */
+.paste-dropzone {
+  border: 2px dashed #1E293B;
+  border-radius: 1rem;
+  background-color: rgba(15, 23, 42, 0.6);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.paste-dropzone:hover, .paste-dropzone.dragover {
+  border-color: #6366F1;
+  background-color: rgba(99, 102, 241, 0.08);
+}
+
+.paste-dropzone.has-image {
+  border-style: solid;
+  border-color: #334155;
+  background-color: #0F172A;
 }
 
 /* Direction Badges */
@@ -84,6 +169,12 @@ tbody tr:hover {
   border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
+.badge-outcome-missed {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #FBBF24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
 /* Toast Animation */
 @keyframes slideInUp {
   from {
@@ -100,13 +191,13 @@ tbody tr:hover {
   animation: slideInUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Pulse Glow for Sync Indicator */
-@keyframes pulseSync {
-  0% { transform: scale(0.95); opacity: 0.7; }
-  50% { transform: scale(1.15); opacity: 1; }
-  100% { transform: scale(0.95); opacity: 0.7; }
+/* Pulse animation for active paste area */
+@keyframes pulsePaste {
+  0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
+  70% { box-shadow: 0 0 0 8px rgba(99, 102, 241, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
 }
 
-.pulse-sync {
-  animation: pulseSync 1.5s infinite ease-in-out;
+.paste-active {
+  animation: pulsePaste 2s infinite;
 }

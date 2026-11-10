@@ -37,36 +37,29 @@ function doPost(e) {
       }
 
       var rows = trades.map(function(t) {
+        var mistakeText = Array.isArray(t.mistakes) ? t.mistakes.join('; ') : (t.mistake || '');
         return [
           t.tradeNum || '',
           t.date || '',
+          t.isMissed ? 'Missed Trade' : 'Executed',
           t.symbol || '',
-          t.market || '',
           t.direction || '',
-          t.entryPrice || 0,
-          t.exitPrice || '',
-          t.stopLoss || '',
-          t.takeProfit || '',
-          t.quantity || 0,
-          t.plannedRisk || 0,
-          t.plannedRR || 0,
-          t.realizedPnL || 0,
-          t.realizedR || 0,
+          t.isMissed ? (t.missedPnL || 0) : (t.realizedPnL || 0),
+          t.isMissed ? (t.missedR || 0) : (t.realizedR || 0),
           t.outcome || '',
           t.strategy || '',
-          t.session || '',
+          t.isMissed ? 'N/A' : (t.planFollowed ? 'Yes' : 'NO (Rule Broken)'),
+          mistakeText,
           t.emotion || '',
-          t.mistake || '',
-          t.planFollowed ? 'Yes' : 'No',
-          t.notes || '',
-          t.chartUrl || ''
+          t.missedReason || '',
+          t.notes || ''
         ];
       });
 
-      sheet.getRange(2, 1, rows.length, 22).setValues(rows);
+      sheet.getRange(2, 1, rows.length, 14).setValues(rows);
 
       // Format header row
-      sheet.getRange(1, 1, 1, 22).setFontWeight("bold").setBackground("#131B2E").setFontColor("#FFFFFF");
+      sheet.getRange(1, 1, 1, 14).setFontWeight("bold").setBackground("#131B2E").setFontColor("#FFFFFF");
       sheet.setFrozenRows(1);
     }
 
@@ -85,11 +78,10 @@ function doPost(e) {
 
 function setupHeaders(sheet) {
   var headers = [
-    "Trade #", "Date & Time", "Symbol", "Market", "Direction",
-    "Entry Price", "Exit Price", "Stop Loss", "Take Profit", "Quantity",
-    "Planned Risk ($)", "Planned R:R", "Realized P&L ($)", "Realized R",
-    "Outcome", "Strategy / Setup", "Session", "Pre-Trade Emotion",
-    "Mistake Tag", "Plan Followed?", "Notes & Lessons", "Chart URL"
+    "Trade #", "Date & Time", "Type", "Symbol", "Direction",
+    "Realized P&L ($)", "Realized R", "Outcome", "Setup / Strategy",
+    "Rules Kept?", "Mistakes / Rule Breaks", "Psychology / Emotion",
+    "Missed Reason", "1 Key Lesson / Notes"
   ];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#131B2E").setFontColor("#FFFFFF");

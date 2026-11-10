@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>100 Trades Journal — Phase 1 Mastery</title>
-  <meta name="description" content="Professional trading journal designed to track your first 100 trades with Google Drive cloud sync and Netlify deployment." />
+  <meta name="description" content="Streamlined trading journal for tracking your next 100 trades with copy-paste screenshots, rule-breaking review, and Google Drive sync." />
   
   <!-- Tailwind CSS & Lucide Icons -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -52,18 +52,18 @@
 <body class="bg-darkBg text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
 
   <!-- Top Announcement / 100-Trade Milestone Banner -->
-  <aside aria-label="Milestone Progress" class="bg-gradient-to-r from-indigo-900/60 via-purple-900/40 to-slate-900 border-b border-indigo-950/80 px-4 py-2 text-xs">
+  <aside aria-label="Milestone Progress" class="bg-gradient-to-r from-indigo-950/80 via-slate-900 to-slate-950 border-b border-indigo-900/40 px-4 py-2 text-xs">
     <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
       <div class="flex items-center space-x-2">
         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-          🎯 Phase 1 Challenge
+          🎯 Phase 1: 100 Trades Goal
         </span>
-        <span class="text-slate-300 font-medium">Goal: Journal 100 consecutive rule-based trades to establish verified statistical edge.</span>
+        <span class="text-slate-300 font-medium">Log 100 disciplined trades to prove your positive statistical expectancy.</span>
       </div>
       <div class="flex items-center space-x-4">
         <div class="flex items-center space-x-2">
-          <span class="text-slate-400">Target Progress:</span>
-          <span id="banner-progress-text" class="font-bold text-indigo-400">0 / 100 Trades (0%)</span>
+          <span class="text-slate-400">Progress:</span>
+          <span id="banner-progress-text" class="font-bold text-indigo-400">0 / 100 (0%)</span>
         </div>
         <div class="w-32 bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700">
           <div id="banner-progress-bar" class="bg-gradient-to-r from-indigo-500 to-emerald-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
@@ -84,7 +84,7 @@
             <h1 class="text-lg font-bold tracking-tight text-white">100 TRADES</h1>
             <span class="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Journal</span>
           </div>
-          <p class="text-xs text-slate-400">Phase 1: Discipline & Statistical Edge</p>
+          <p class="text-xs text-slate-400">Phase 1: Discipline & Psychological Review</p>
         </div>
       </div>
 
@@ -118,7 +118,7 @@
         </button>
 
         <!-- New Trade Button -->
-        <button id="btn-open-new-trade" class="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg shadow-emerald-500/20 transition-all transform active:scale-95">
+        <button id="btn-open-new-trade" class="flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg shadow-emerald-500/25 transition-all transform active:scale-95">
           <i data-lucide="plus-circle" class="w-4 h-4"></i>
           <span>Log Trade</span>
         </button>
@@ -134,13 +134,12 @@
   <!-- Main Container -->
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
 
-    <!-- KPI Metric Cards Grid -->
+    <!-- KPI Metric Cards Grid (Most Important Metrics Focused) -->
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
       <!-- Card 1: 100 Trades Counter -->
       <div class="kpi-card bg-cardBg border border-borderSubtle rounded-2xl p-4 shadow-sm relative overflow-hidden group">
-        <div class="absolute -right-3 -top-3 w-16 h-16 bg-indigo-500/5 rounded-full blur-xl group-hover:bg-indigo-500/10 transition"></div>
         <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
-          <span>Phase 1 Milestone</span>
+          <span>100 Trades Goal</span>
           <i data-lucide="flag" class="w-3.5 h-3.5 text-indigo-400"></i>
         </div>
         <div class="flex items-baseline space-x-1.5">
@@ -148,7 +147,7 @@
           <span class="text-xs text-slate-400">/ 100</span>
         </div>
         <div class="mt-2 flex items-center justify-between text-[11px]">
-          <span id="kpi-trades-remaining" class="text-slate-400">100 to go</span>
+          <span id="kpi-trades-remaining" class="text-slate-400">100 remaining</span>
           <span id="kpi-pct-complete" class="font-bold text-indigo-400">0%</span>
         </div>
         <div class="w-full bg-slate-800 rounded-full h-1.5 mt-1.5 overflow-hidden">
@@ -156,7 +155,7 @@
         </div>
       </div>
 
-      <!-- Card 2: Net P&L -->
+      <!-- Card 2: Net Cumulative P&L -->
       <div class="kpi-card bg-cardBg border border-borderSubtle rounded-2xl p-4 shadow-sm relative overflow-hidden group">
         <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
           <span>Net Cumulative P&L</span>
@@ -169,13 +168,16 @@
         </div>
       </div>
 
-      <!-- Card 3: Win Rate -->
+      <!-- Card 3: Win Rate & Profit Factor -->
       <div class="kpi-card bg-cardBg border border-borderSubtle rounded-2xl p-4 shadow-sm relative overflow-hidden group">
         <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
-          <span>Win Rate</span>
+          <span>Win Rate / PF</span>
           <i data-lucide="target" class="w-3.5 h-3.5 text-indigo-400"></i>
         </div>
-        <div id="kpi-win-rate" class="text-2xl font-black text-white">0.0%</div>
+        <div class="flex items-baseline space-x-1.5">
+          <span id="kpi-win-rate" class="text-2xl font-black text-white">0%</span>
+          <span id="kpi-profit-factor" class="text-xs font-bold text-cyan-400">PF: 0.0</span>
+        </div>
         <div class="mt-2 flex items-center justify-between text-[11px]">
           <span class="text-tradeGreen font-semibold"><span id="kpi-win-count">0</span>W</span>
           <span class="text-tradeRed font-semibold"><span id="kpi-loss-count">0</span>L</span>
@@ -183,33 +185,7 @@
         </div>
       </div>
 
-      <!-- Card 4: Profit Factor -->
-      <div class="kpi-card bg-cardBg border border-borderSubtle rounded-2xl p-4 shadow-sm relative overflow-hidden group">
-        <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
-          <span>Profit Factor</span>
-          <i data-lucide="trending-up" class="w-3.5 h-3.5 text-cyan-400"></i>
-        </div>
-        <div id="kpi-profit-factor" class="text-2xl font-black text-white">0.00</div>
-        <div class="mt-2 flex items-center justify-between text-[11px]">
-          <span class="text-slate-400">Avg Win / Loss</span>
-          <span id="kpi-win-loss-ratio" class="font-semibold text-slate-300">$0 / $0</span>
-        </div>
-      </div>
-
-      <!-- Card 5: Realized R:R -->
-      <div class="kpi-card bg-cardBg border border-borderSubtle rounded-2xl p-4 shadow-sm relative overflow-hidden group">
-        <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
-          <span>Avg Realized R:R</span>
-          <i data-lucide="scale" class="w-3.5 h-3.5 text-amber-400"></i>
-        </div>
-        <div id="kpi-avg-rr" class="text-2xl font-black text-white">1:0.0</div>
-        <div class="mt-2 flex items-center justify-between text-[11px]">
-          <span class="text-slate-400">Total R Realized</span>
-          <span id="kpi-total-r" class="font-semibold text-indigo-400">0.0R</span>
-        </div>
-      </div>
-
-      <!-- Card 6: Discipline Adherence -->
+      <!-- Card 4: Discipline Score -->
       <div class="kpi-card bg-cardBg border border-borderSubtle rounded-2xl p-4 shadow-sm relative overflow-hidden group">
         <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
           <span>Discipline Score</span>
@@ -217,8 +193,37 @@
         </div>
         <div id="kpi-discipline-score" class="text-2xl font-black text-emerald-400">100%</div>
         <div class="mt-2 flex items-center justify-between text-[11px]">
-          <span class="text-slate-400">Plan Followed</span>
+          <span class="text-slate-400">Rules Followed</span>
           <span id="kpi-discipline-count" class="font-semibold text-slate-300">0 / 0</span>
+        </div>
+      </div>
+
+      <!-- Card 5: Cost of Broken Rules (Vital Psychology Metric) -->
+      <div class="kpi-card bg-cardBg border border-borderSubtle rounded-2xl p-4 shadow-sm relative overflow-hidden group">
+        <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
+          <span>Cost of Rule Breaks</span>
+          <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-rose-400"></i>
+        </div>
+        <div id="kpi-cost-broken" class="text-2xl font-black text-rose-400">$0.00</div>
+        <div class="mt-2 flex items-center justify-between text-[11px]">
+          <span class="text-slate-400">Top Mistake</span>
+          <span id="kpi-top-mistake" class="font-semibold text-amber-300 truncate max-w-[90px]" title="Top Mistake">None</span>
+        </div>
+      </div>
+
+      <!-- Card 6: Missed Trades Opportunity -->
+      <div class="kpi-card bg-cardBg border border-borderSubtle rounded-2xl p-4 shadow-sm relative overflow-hidden group">
+        <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
+          <span>Missed Trades</span>
+          <i data-lucide="eye-off" class="w-3.5 h-3.5 text-amber-400"></i>
+        </div>
+        <div class="flex items-baseline space-x-1.5">
+          <span id="kpi-missed-count" class="text-2xl font-black text-amber-400">0</span>
+          <span class="text-xs text-slate-400">Trades</span>
+        </div>
+        <div class="mt-2 flex items-center justify-between text-[11px]">
+          <span class="text-slate-400">Left on Table</span>
+          <span id="kpi-missed-pnl" class="font-semibold text-slate-300">$0.00</span>
         </div>
       </div>
     </div>
@@ -231,17 +236,14 @@
           <!-- Search box -->
           <div class="relative flex-1 min-w-[180px] max-w-xs">
             <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
-            <input id="filter-search" type="text" placeholder="Search ticker, strategy, note..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition" />
+            <input id="filter-search" type="text" placeholder="Search symbol, mistake, note..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition" />
           </div>
 
-          <!-- Market Filter -->
-          <select id="filter-market" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500">
-            <option value="ALL">All Markets</option>
-            <option value="Crypto">Crypto</option>
-            <option value="Forex">Forex</option>
-            <option value="Stocks">Stocks</option>
-            <option value="Futures">Futures</option>
-            <option value="Indices">Indices</option>
+          <!-- Trade Type Filter -->
+          <select id="filter-type" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500">
+            <option value="ALL">All Entries</option>
+            <option value="EXECUTED">Executed Only</option>
+            <option value="MISSED">Missed Trades</option>
           </select>
 
           <!-- Outcome Filter -->
@@ -253,24 +255,17 @@
             <option value="OPEN">Open Positions</option>
           </select>
 
-          <!-- Direction Filter -->
-          <select id="filter-direction" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500">
-            <option value="ALL">Long & Short</option>
-            <option value="LONG">Long</option>
-            <option value="SHORT">Short</option>
-          </select>
-
           <!-- Plan Followed Filter -->
           <select id="filter-plan" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500">
             <option value="ALL">Discipline: All</option>
-            <option value="YES">Plan Followed (Yes)</option>
-            <option value="NO">Plan Broken (No)</option>
+            <option value="YES">100% Disciplined</option>
+            <option value="NO">Rules Broken ⚠️</option>
           </select>
         </div>
 
         <!-- Right Side Utility Buttons -->
         <div class="flex items-center space-x-2">
-          <button id="btn-load-samples" class="px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white bg-slate-900 border border-slate-700 hover:border-slate-600 transition" title="Populate realistic demo trades to preview analytics">
+          <button id="btn-load-samples" class="px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white bg-slate-900 border border-slate-700 hover:border-slate-600 transition" title="Populate realistic demo trades with rule-breaking and screenshots to preview">
             <i data-lucide="sparkles" class="w-3.5 h-3.5 inline mr-1 text-indigo-400"></i>
             <span>Demo Data</span>
           </button>
@@ -296,15 +291,15 @@
                 <th class="py-3.5 px-4 w-12 text-center">#</th>
                 <th class="py-3.5 px-3">Date</th>
                 <th class="py-3.5 px-3">Symbol</th>
-                <th class="py-3.5 px-3">Market</th>
+                <th class="py-3.5 px-3">Type</th>
                 <th class="py-3.5 px-3">Dir</th>
-                <th class="py-3.5 px-3 text-right">Entry</th>
-                <th class="py-3.5 px-3 text-right">Exit</th>
-                <th class="py-3.5 px-3 text-right">Planned R:R</th>
-                <th class="py-3.5 px-3 text-right">Realized P&L</th>
-                <th class="py-3.5 px-3 text-center">Outcome</th>
-                <th class="py-3.5 px-3">Strategy</th>
-                <th class="py-3.5 px-3 text-center">Plan?</th>
+                <th class="py-3.5 px-3 text-right">P&L ($)</th>
+                <th class="py-3.5 px-3 text-right">R</th>
+                <th class="py-3.5 px-3 text-center">Result</th>
+                <th class="py-3.5 px-3">Setup</th>
+                <th class="py-3.5 px-3 text-center">Rules?</th>
+                <th class="py-3.5 px-3">Psychology / Mistake</th>
+                <th class="py-3.5 px-3 text-center">Chart</th>
                 <th class="py-3.5 px-4 text-center">Actions</th>
               </tr>
             </thead>
@@ -321,14 +316,14 @@
           </div>
           <h3 class="text-base font-bold text-white">Your 100-Trade Journal is Empty</h3>
           <p class="text-xs text-slate-400 max-w-md mx-auto">
-            Every master trader begins with a single recorded trade. Click <strong class="text-emerald-400">Log Trade</strong> to record Trade #1 or click <strong class="text-indigo-400">Demo Data</strong> to preview how your statistics will look.
+            Click <strong class="text-emerald-400">Log Trade</strong> to start Trade #1 with copy-paste screenshot support, or load demo data to preview your analytics.
           </p>
           <div class="pt-2 flex items-center justify-center space-x-3">
             <button id="btn-empty-add-trade" class="px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white shadow-md transition">
               + Log Trade #1
             </button>
             <button id="btn-empty-demo" class="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
-              Load 10 Sample Trades
+              Load Demo Trades
             </button>
           </div>
         </div>
@@ -343,9 +338,9 @@
           <div>
             <h2 class="text-base font-bold text-white flex items-center space-x-2">
               <i data-lucide="trending-up" class="w-5 h-5 text-emerald-400"></i>
-              <span>100-Trade Equity Curve & R-Multiple Evolution</span>
+              <span>100-Trade Cumulative Equity Curve</span>
             </h2>
-            <p class="text-xs text-slate-400">Cumulative performance over the 100-trade baseline sample size</p>
+            <p class="text-xs text-slate-400">Visualizing your statistical trajectory across the 100-trade baseline</p>
           </div>
           <div class="flex items-center space-x-2 text-xs">
             <button id="btn-chart-mode-dollar" class="px-3 py-1 rounded-lg font-medium bg-indigo-600 text-white transition">Cumulative $ P&L</button>
@@ -363,61 +358,35 @@
         <div class="bg-cardBg border border-borderSubtle rounded-2xl p-5 shadow-sm">
           <h3 class="text-sm font-bold text-white mb-1 flex items-center space-x-2">
             <i data-lucide="layers" class="w-4 h-4 text-indigo-400"></i>
-            <span>Performance by Strategy</span>
+            <span>Performance by Setup</span>
           </h3>
-          <p class="text-[11px] text-slate-400 mb-3">Which setups are producing your positive expectancy?</p>
+          <p class="text-[11px] text-slate-400 mb-3">Which setups give you the highest expectancy?</p>
           <div class="h-56">
             <canvas id="strategy-chart"></canvas>
           </div>
         </div>
 
-        <!-- Discipline vs Profitability -->
+        <!-- Cost of Discipline (Plan Followed vs Broken) -->
         <div class="bg-cardBg border border-borderSubtle rounded-2xl p-5 shadow-sm">
           <h3 class="text-sm font-bold text-white mb-1 flex items-center space-x-2">
-            <i data-lucide="shield-alert" class="w-4 h-4 text-amber-400"></i>
-            <span>Discipline Impact (Plan Followed vs Broken)</span>
+            <i data-lucide="shield-alert" class="w-4 h-4 text-rose-400"></i>
+            <span>Discipline Review (Disciplined vs Rule Breaks)</span>
           </h3>
-          <p class="text-[11px] text-slate-400 mb-3">Does breaking rules cost you money?</p>
+          <p class="text-[11px] text-slate-400 mb-3">Compare real P&L when rules were kept vs broken</p>
           <div class="h-56">
             <canvas id="discipline-chart"></canvas>
           </div>
         </div>
 
-        <!-- Win/Loss Ratio & Market Breakdown -->
+        <!-- Psychology Impact -->
         <div class="bg-cardBg border border-borderSubtle rounded-2xl p-5 shadow-sm">
           <h3 class="text-sm font-bold text-white mb-1 flex items-center space-x-2">
-            <i data-lucide="pie-chart" class="w-4 h-4 text-emerald-400"></i>
-            <span>Market & Direction Breakdown</span>
+            <i data-lucide="brain" class="w-4 h-4 text-purple-400"></i>
+            <span>Psychology & Emotion vs P&L</span>
           </h3>
-          <p class="text-[11px] text-slate-400 mb-3">Long vs Short & Asset Class Distribution</p>
+          <p class="text-[11px] text-slate-400 mb-3">Which emotional states drain your capital?</p>
           <div class="h-56">
             <canvas id="market-chart"></canvas>
-          </div>
-        </div>
-      </div>
-
-      <!-- Detailed Metrics Breakdown Table -->
-      <div class="bg-cardBg border border-borderSubtle rounded-2xl p-5 shadow-sm">
-        <h3 class="text-sm font-bold text-white mb-3 flex items-center space-x-2">
-          <i data-lucide="calculator" class="w-4 h-4 text-cyan-400"></i>
-          <span>Statistical Expectancy Scorecard</span>
-        </h3>
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-          <div class="p-3 bg-slate-900/60 rounded-xl border border-slate-800">
-            <div class="text-slate-400">Expectancy ($/trade)</div>
-            <div id="stat-expectancy-dollar" class="text-lg font-bold text-white mt-1">$0.00</div>
-          </div>
-          <div class="p-3 bg-slate-900/60 rounded-xl border border-slate-800">
-            <div class="text-slate-400">Expectancy (R/trade)</div>
-            <div id="stat-expectancy-r" class="text-lg font-bold text-indigo-400 mt-1">+0.00R</div>
-          </div>
-          <div class="p-3 bg-slate-900/60 rounded-xl border border-slate-800">
-            <div class="text-slate-400">Max Win Streak</div>
-            <div id="stat-max-win-streak" class="text-lg font-bold text-emerald-400 mt-1">0 Trades</div>
-          </div>
-          <div class="p-3 bg-slate-900/60 rounded-xl border border-slate-800">
-            <div class="text-slate-400">Max Loss Streak</div>
-            <div id="stat-max-loss-streak" class="text-lg font-bold text-rose-400 mt-1">0 Trades</div>
           </div>
         </div>
       </div>
@@ -428,85 +397,62 @@
       <div class="bg-cardBg border border-borderSubtle rounded-2xl p-6 shadow-sm">
         <div class="max-w-3xl">
           <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 mb-2">
-            The Mark Douglas 100-Trade Framework
+            Phase 1 Mastery Blueprint
           </span>
-          <h2 class="text-xl font-black text-white">Why the First 100 Trades Define Your Edge</h2>
+          <h2 class="text-xl font-black text-white">Why 100 Consecutive Trades?</h2>
           <p class="text-xs text-slate-300 mt-2 leading-relaxed">
-            In trading psychology, a sample size of fewer than 50-100 trades is statistically insignificant. A lucky streak can make a losing strategy look brilliant, while a normal 5-loss drawdown can cause you to abandon a winning system. 
-            <strong>Your sole mission in Phase 1 is to execute 100 trades with identical risk and strict discipline, logging every single one into Google Drive.</strong>
+            In trading psychology, a sample size of fewer than 100 trades is statistically insignificant. A random win streak can make bad habits feel good, while a normal losing streak can destroy confidence. 
+            <strong>Your goal in Phase 1 is not to make \$1,000,000; it is to execute 100 disciplined, rule-based trades without revenge trading or moving stop losses.</strong>
           </p>
         </div>
 
         <!-- 4 Milestones Progress -->
         <div class="mt-8 grid grid-cols-1 md:grid-cols-4 gap-4">
-          <!-- Milestone 1 -->
           <div class="p-4 rounded-xl border border-borderSubtle bg-slate-900/60 relative">
             <div class="flex items-center justify-between mb-2">
               <span class="text-xs font-bold text-indigo-400">MILESTONE 1</span>
               <span class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300">Trades 1-25</span>
             </div>
             <h4 class="text-sm font-bold text-white">Execution Calibration</h4>
-            <p class="text-[11px] text-slate-400 mt-1">Eliminate fat-finger errors, stick to fixed position sizing (1-2% max), never move stops.</p>
+            <p class="text-[11px] text-slate-400 mt-1">Eliminate sizing errors, respect stops, and stop chasing extended candles.</p>
             <div class="mt-3 flex items-center text-xs">
               <span id="badge-m1" class="text-slate-500 font-semibold">🔒 In Progress</span>
             </div>
           </div>
 
-          <!-- Milestone 2 -->
           <div class="p-4 rounded-xl border border-borderSubtle bg-slate-900/60 relative">
             <div class="flex items-center justify-between mb-2">
               <span class="text-xs font-bold text-indigo-400">MILESTONE 2</span>
               <span class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300">Trades 26-50</span>
             </div>
             <h4 class="text-sm font-bold text-white">Emotional Neutrality</h4>
-            <p class="text-[11px] text-slate-400 mt-1">Accept losses as the natural cost of business. Overcome revenge trading and FOMO entries.</p>
+            <p class="text-[11px] text-slate-400 mt-1">Accept losses as business expense. Eliminate revenge trades and FOMO entries.</p>
             <div class="mt-3 flex items-center text-xs">
               <span id="badge-m2" class="text-slate-500 font-semibold">🔒 Locked</span>
             </div>
           </div>
 
-          <!-- Milestone 3 -->
           <div class="p-4 rounded-xl border border-borderSubtle bg-slate-900/60 relative">
             <div class="flex items-center justify-between mb-2">
               <span class="text-xs font-bold text-indigo-400">MILESTONE 3</span>
               <span class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300">Trades 51-75</span>
             </div>
-            <h4 class="text-sm font-bold text-white">Statistical Patterns</h4>
-            <p class="text-[11px] text-slate-400 mt-1">Identify your highest expectancy setups and ruthlessly cut low-probability, emotional setups.</p>
+            <h4 class="text-sm font-bold text-white">Statistical Edge</h4>
+            <p class="text-[11px] text-slate-400 mt-1">Double down on your highest expectancy setups; cut setups that don't pay.</p>
             <div class="mt-3 flex items-center text-xs">
               <span id="badge-m3" class="text-slate-500 font-semibold">🔒 Locked</span>
             </div>
           </div>
 
-          <!-- Milestone 4 -->
           <div class="p-4 rounded-xl border border-borderSubtle bg-slate-900/60 relative">
             <div class="flex items-center justify-between mb-2">
               <span class="text-xs font-bold text-emerald-400">MILESTONE 4</span>
               <span class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300">Trades 76-100</span>
             </div>
             <h4 class="text-sm font-bold text-white">Phase 1 Graduation</h4>
-            <p class="text-[11px] text-slate-400 mt-1">100 verified trades logged in Google Drive. You now possess real mathematical data to scale capital.</p>
+            <p class="text-[11px] text-slate-400 mt-1">100 verified trades in Google Drive. You now have the mathematical right to scale capital.</p>
             <div class="mt-3 flex items-center text-xs">
               <span id="badge-m4" class="text-slate-500 font-semibold">🔒 Locked</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 3 Golden Rules -->
-        <div class="mt-8 border-t border-borderSubtle pt-6">
-          <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-3">The 3 Golden Rules of This 100-Trade Journal</h3>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-            <div class="p-3.5 bg-slate-900/40 rounded-xl border border-slate-800/80">
-              <span class="text-emerald-400 font-bold block mb-1">1. Fixed Risk Per Trade</span>
-              <p class="text-slate-400">Never risk more than 1% to 2% of total capital on any single trade during the 100-trade evaluation phase.</p>
-            </div>
-            <div class="p-3.5 bg-slate-900/40 rounded-xl border border-slate-800/80">
-              <span class="text-indigo-400 font-bold block mb-1">2. Journal Before Leaving Screen</span>
-              <p class="text-slate-400">Log every trade immediately upon closing. Waiting hours distorts emotional recall and lessons learned.</p>
-            </div>
-            <div class="p-3.5 bg-slate-900/40 rounded-xl border border-slate-800/80">
-              <span class="text-purple-400 font-bold block mb-1">3. The Stop Loss is Holy</span>
-              <p class="text-slate-400">Never widen or remove a Stop Loss mid-trade. An initial stop loss hit is disciplined execution, not a failure.</p>
             </div>
           </div>
         </div>
@@ -523,7 +469,7 @@
               <h2 class="text-lg font-bold text-white">Google Drive Cloud Storage</h2>
             </div>
             <p class="text-xs text-slate-400 mt-1">
-              Store, sync, and backup your 100 trades directly to your personal Google Drive account.
+              Store, sync, and backup your 100 trades directly to your Google Drive account.
             </p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
@@ -564,37 +510,16 @@
           </div>
         </div>
 
-        <!-- Two Ways to Store in Google Drive -->
+        <!-- Two Methods -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-          <!-- Method A: Google OAuth (Direct File in Drive) -->
-          <div class="p-5 bg-slate-900/80 rounded-2xl border border-indigo-900/40 space-y-3">
-            <div class="flex items-center space-x-2">
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">METHOD 1</span>
-              <h3 class="text-sm font-bold text-white">Direct Google Drive OAuth</h3>
-            </div>
-            <p class="text-xs text-slate-300 leading-relaxed">
-              Stores a structured JSON / CSV backup file inside your Google Drive using the secure <code class="text-indigo-400 bg-slate-950 px-1 py-0.5 rounded">drive.file</code> scope (this app can only see files it created, protecting your privacy).
-            </p>
-            <div class="space-y-2 pt-2">
-              <label class="block text-xs font-semibold text-slate-400">Google OAuth Client ID</label>
-              <div class="flex space-x-2">
-                <input id="input-gdrive-client-id" type="text" placeholder="e.g. 123456789-xyz.apps.googleusercontent.com" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500" />
-                <button id="btn-save-client-id" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white">Save</button>
-              </div>
-              <p class="text-[11px] text-slate-500">
-                To create a free Client ID in 2 minutes: Visit Google Cloud Console &rarr; Create Project &rarr; OAuth Consent Screen &rarr; Credentials &rarr; OAuth Client ID (Web Application) with your Netlify origin.
-              </p>
-            </div>
-          </div>
-
-          <!-- Method B: Google Apps Script Webhook (Live Google Sheet) -->
+          <!-- Method A: Google Sheets Webhook -->
           <div class="p-5 bg-slate-900/80 rounded-2xl border border-emerald-900/40 space-y-3">
             <div class="flex items-center space-x-2">
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">METHOD 2 (Zero OAuth)</span>
-              <h3 class="text-sm font-bold text-white">Google Sheet Webhook (Drive Spreadsheet)</h3>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">RECOMMENDED (1 MINUTE)</span>
+              <h3 class="text-sm font-bold text-white">Google Sheet Webhook (In Drive)</h3>
             </div>
             <p class="text-xs text-slate-300 leading-relaxed">
-              Prefer an actual Google Spreadsheet in your Drive? Set up a free Google Apps Script web app. Every trade logs as an instant row in your Drive spreadsheet!
+              Logs every trade into an actual Google Spreadsheet in your Google Drive without managing OAuth client IDs!
             </p>
             <div class="space-y-2 pt-2">
               <label class="block text-xs font-semibold text-slate-400">Google Apps Script Webhook URL</label>
@@ -604,42 +529,52 @@
               </div>
               <button id="btn-view-apps-script" class="text-[11px] text-emerald-400 hover:underline flex items-center space-x-1">
                 <i data-lucide="code" class="w-3 h-3"></i>
-                <span>View Google Apps Script Code (Copy & Paste)</span>
+                <span>View Google Apps Script Instructions</span>
               </button>
             </div>
           </div>
-        </div>
 
-        <!-- Netlify Deployment Info Card -->
-        <div class="mt-6 p-5 bg-gradient-to-r from-slate-900 via-indigo-950/30 to-slate-900 rounded-2xl border border-borderSubtle flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div class="space-y-1">
+          <!-- Method B: Google Drive OAuth -->
+          <div class="p-5 bg-slate-900/80 rounded-2xl border border-indigo-900/40 space-y-3">
             <div class="flex items-center space-x-2">
-              <span class="w-2.5 h-2.5 rounded-full bg-teal-400"></span>
-              <h4 class="text-sm font-bold text-white">Deploying to Netlify</h4>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">METHOD 2</span>
+              <h3 class="text-sm font-bold text-white">Direct Google Drive OAuth</h3>
             </div>
-            <p class="text-xs text-slate-400 max-w-xl">
-              This app is ready to deploy on Netlify. Drag-and-drop this project folder into <span class="text-teal-400 font-semibold">app.netlify.com/drop</span> or deploy via Netlify CLI to receive your live <code class="text-slate-300 bg-slate-800 px-1 py-0.5 rounded">https://your-journal.netlify.app</code> URL.
+            <p class="text-xs text-slate-300 leading-relaxed">
+              Stores a JSON/CSV file in your Google Drive using the secure <code class="text-indigo-400 bg-slate-950 px-1 py-0.5 rounded">drive.file</code> scope.
             </p>
+            <div class="space-y-2 pt-2">
+              <label class="block text-xs font-semibold text-slate-400">Google OAuth Client ID</label>
+              <div class="flex space-x-2">
+                <input id="input-gdrive-client-id" type="text" placeholder="e.g. 123456789-xyz.apps.googleusercontent.com" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500" />
+                <button id="btn-save-client-id" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white">Save</button>
+              </div>
+            </div>
           </div>
-          <button id="btn-show-netlify-guide" class="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-teal-300 border border-teal-500/30 transition whitespace-nowrap">
-            View Netlify Setup Guide
-          </button>
         </div>
       </div>
     </section>
 
   </main>
 
-  <!-- MODAL: ADD / EDIT TRADE -->
-  <div id="modal-trade" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden items-center justify-center p-4 overflow-y-auto">
-    <div class="bg-cardBg border border-borderSubtle rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden my-8 transform transition-all">
-      <!-- Modal Header -->
-      <div class="bg-slate-900/90 px-6 py-4 border-b border-borderSubtle flex items-center justify-between">
-        <div class="flex items-center space-x-2">
+  <!-- MODAL: ADD / EDIT TRADE (SIMPLIFIED, FAST, LEAST WRITING) -->
+  <div id="modal-trade" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-cardBg border border-borderSubtle rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden my-6 transform transition-all">
+      <!-- Modal Header with Executed vs Missed Mode Switcher -->
+      <div class="bg-slate-900/90 px-5 py-3.5 border-b border-borderSubtle flex items-center justify-between">
+        <div class="flex items-center space-x-3">
           <span id="modal-trade-badge" class="px-2 py-0.5 rounded text-xs font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
             Trade #1
           </span>
-          <h3 id="modal-trade-title" class="text-base font-bold text-white">Log New Trade</h3>
+          <!-- Mode Switcher -->
+          <div class="flex items-center bg-slate-950 p-0.5 rounded-xl border border-slate-800">
+            <button type="button" id="tab-mode-executed" class="px-3 py-1 rounded-lg text-xs font-bold text-white bg-indigo-600 shadow-sm transition">
+              ⚡ Executed Trade
+            </button>
+            <button type="button" id="tab-mode-missed" class="px-3 py-1 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">
+              👁️ Missed Trade
+            </button>
+          </div>
         </div>
         <button id="btn-close-trade-modal" class="text-slate-400 hover:text-white transition p-1">
           <i data-lucide="x" class="w-5 h-5"></i>
@@ -647,212 +582,238 @@
       </div>
 
       <!-- Modal Form -->
-      <form id="form-trade" class="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+      <form id="form-trade" class="p-5 space-y-4 max-h-[82vh] overflow-y-auto">
         <input type="hidden" id="trade-id" />
+        <input type="hidden" id="trade-is-missed" value="false" />
+        <input type="hidden" id="trade-screenshot-data" value="" />
 
-        <!-- Row 1: Trade Number, Date, Market -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Trade # (Phase 1 / 100)</label>
-            <input id="input-trade-num" type="number" min="1" max="100" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
-          </div>
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Date & Time</label>
-            <input id="input-trade-date" type="datetime-local" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
-          </div>
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Market</label>
-            <select id="input-trade-market" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
-              <option value="Crypto">Crypto</option>
-              <option value="Forex">Forex</option>
-              <option value="Stocks">Stocks</option>
-              <option value="Futures">Futures</option>
-              <option value="Indices">Indices</option>
-              <option value="Commodities">Commodities</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Row 2: Symbol & Direction Toggle -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Asset / Symbol</label>
-            <input id="input-trade-symbol" type="text" placeholder="e.g. BTCUSDT, EURUSD, NVDA, ES" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white uppercase focus:outline-none focus:border-indigo-500" />
-            <!-- Popular quick tags -->
-            <div class="flex items-center space-x-1.5 mt-1.5 overflow-x-auto text-[10px] text-slate-400">
-              <span>Quick:</span>
-              <button type="button" class="quick-tag px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700">BTC</button>
-              <button type="button" class="quick-tag px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700">ETH</button>
-              <button type="button" class="quick-tag px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700">EURUSD</button>
-              <button type="button" class="quick-tag px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700">NQ</button>
-              <button type="button" class="quick-tag px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700">ES</button>
-              <button type="button" class="quick-tag px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700">SPY</button>
-            </div>
-          </div>
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Trade Direction</label>
-            <div class="grid grid-cols-2 gap-2">
-              <button type="button" id="toggle-dir-long" class="dir-btn active py-2 rounded-xl text-xs font-bold border transition flex items-center justify-center space-x-1 bg-tradeGreen-bg border-tradeGreen text-tradeGreen">
-                <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
-                <span>LONG (BUY)</span>
-              </button>
-              <button type="button" id="toggle-dir-short" class="dir-btn py-2 rounded-xl text-xs font-bold border transition flex items-center justify-center space-x-1 bg-slate-900 border-slate-700 text-slate-400">
-                <i data-lucide="arrow-down-right" class="w-4 h-4"></i>
-                <span>SHORT (SELL)</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Row 3: Prices & Position -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Entry Price</label>
-            <input id="input-entry-price" type="number" step="any" required placeholder="0.00" class="calc-input w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
-          </div>
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Stop Loss</label>
-            <input id="input-stop-loss" type="number" step="any" placeholder="0.00" class="calc-input w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
-          </div>
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Take Profit Target</label>
-            <input id="input-take-profit" type="number" step="any" placeholder="0.00" class="calc-input w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
-          </div>
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Exit Price</label>
-            <input id="input-exit-price" type="number" step="any" placeholder="Leave empty if open" class="calc-input w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
-          </div>
-        </div>
-
-        <!-- Row 4: Quantity & Fees -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Position Size / Qty</label>
-            <input id="input-quantity" type="number" step="any" required placeholder="Units / Shares / Lots" class="calc-input w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
-          </div>
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Fees & Commission ($)</label>
-            <input id="input-fees" type="number" step="any" value="0.00" class="calc-input w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
-          </div>
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Outcome Status</label>
-            <select id="input-outcome" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-semibold">
-              <option value="AUTO">Auto Calculate</option>
-              <option value="WIN">Win</option>
-              <option value="LOSS">Loss</option>
-              <option value="BE">Breakeven</option>
-              <option value="OPEN">Open (Holding)</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Live Calculation Box -->
-        <div class="p-3 bg-slate-900/90 rounded-xl border border-indigo-900/40 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
-          <div>
-            <span class="text-[10px] text-slate-400 uppercase block">Planned Risk</span>
-            <span id="calc-planned-risk" class="font-bold text-rose-400">$0.00</span>
-          </div>
-          <div>
-            <span class="text-[10px] text-slate-400 uppercase block">Planned R:R</span>
-            <span id="calc-planned-rr" class="font-bold text-indigo-400">1:0.0</span>
-          </div>
-          <div>
-            <span class="text-[10px] text-slate-400 uppercase block">Realized P&L</span>
-            <span id="calc-realized-pnl" class="font-bold text-slate-300">$0.00</span>
-          </div>
-          <div>
-            <span class="text-[10px] text-slate-400 uppercase block">Realized R</span>
-            <span id="calc-realized-r" class="font-bold text-slate-300">0.0R</span>
-          </div>
-        </div>
-
-        <!-- Row 5: Setup & Session -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Strategy / Setup Model</label>
-            <input id="input-strategy" list="strategy-suggestions" placeholder="e.g. FVG & Sweep, Pullback, Breakout, VWAP" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
-            <datalist id="strategy-suggestions">
-              <option value="Fair Value Gap / Liquidity Sweep"></option>
-              <option value="Breakout & Retest"></option>
-              <option value="20 EMA Trend Pullback"></option>
-              <option value="Support / Resistance Bounce"></option>
-              <option value="Mean Reversion / VWAP"></option>
-              <option value="Opening Range Breakout (ORB)"></option>
-              <option value="Supply / Demand Order Block"></option>
-            </datalist>
-          </div>
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Trading Session</label>
-            <select id="input-session" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
-              <option value="New York Morning">New York Morning (9:30 - 12:00 EST)</option>
-              <option value="New York Afternoon">New York Afternoon (13:30 - 16:00 EST)</option>
-              <option value="London Open">London Open (03:00 - 07:00 EST)</option>
-              <option value="Asian / Sydney">Asian / Sydney</option>
-              <option value="Overnight / Post">Overnight / Post-market</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Row 6: Psychology & Discipline (Essential for 100-Trade baseline) -->
-        <div class="p-3 bg-slate-900/60 rounded-xl border border-slate-800 space-y-3">
+        <!-- Row 1: Symbol & Direction -->
+        <div class="space-y-1.5">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-bold text-slate-300 flex items-center space-x-1.5">
-              <i data-lucide="brain" class="w-4 h-4 text-purple-400"></i>
-              <span>Trading Psychology & Rule Adherence</span>
-            </span>
+            <label class="text-[11px] font-bold text-slate-400 uppercase">Symbol / Asset</label>
+            <div class="flex items-center space-x-1.5 text-[11px] text-slate-400">
+              <span>Quick:</span>
+              <button type="button" class="quick-symbol px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300">BTC</button>
+              <button type="button" class="quick-symbol px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300">ETH</button>
+              <button type="button" class="quick-symbol px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300">SOL</button>
+              <button type="button" class="quick-symbol px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300">NQ</button>
+              <button type="button" class="quick-symbol px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300">ES</button>
+              <button type="button" class="quick-symbol px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300">EURUSD</button>
+              <button type="button" class="quick-symbol px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300">GOLD</button>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+            <input id="input-trade-symbol" type="text" placeholder="e.g. BTCUSDT, EURUSD, NVDA, NQ" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white uppercase focus:outline-none focus:border-indigo-500 font-bold tracking-wide" />
+            <div class="grid grid-cols-2 gap-2">
+              <button type="button" id="btn-dir-long" class="chip-btn chip-long active py-2 text-xs font-bold">
+                ▲ LONG (BUY)
+              </button>
+              <button type="button" id="btn-dir-short" class="chip-btn chip-short py-2 text-xs font-bold">
+                ▼ SHORT (SELL)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 2: Outcome & P&L (Direct & Fast, Least Writing) -->
+        <div id="section-executed-results" class="p-3.5 bg-slate-900/80 rounded-2xl border border-slate-800 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-bold text-slate-300 uppercase">Trade Result</span>
+            <div class="flex items-center space-x-1.5">
+              <button type="button" class="chip-btn chip-win active outcome-chip" data-val="WIN">🟢 WIN</button>
+              <button type="button" class="chip-btn chip-loss outcome-chip" data-val="LOSS">🔴 LOSS</button>
+              <button type="button" class="chip-btn chip-be outcome-chip" data-val="BE">⚪ BE</button>
+              <button type="button" class="chip-btn outcome-chip" data-val="OPEN">🔵 OPEN</button>
+            </div>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="grid grid-cols-3 gap-3">
             <div>
-              <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Pre-Trade Emotion</label>
-              <select id="input-emotion" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white">
-                <option value="Calm & Disciplined">Calm & Disciplined</option>
-                <option value="Confident / Prepared">Confident / Prepared</option>
-                <option value="FOMO / Chasing">FOMO / Chasing</option>
-                <option value="Revenge / Anxious">Revenge / Anxious</option>
-                <option value="Bored / Impatient">Bored / Impatient</option>
-              </select>
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Realized P&L ($)</label>
+              <input id="input-quick-pnl" type="number" step="any" placeholder="+$250 or -$100" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white focus:outline-none focus:border-emerald-500" />
             </div>
             <div>
-              <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Execution Mistake?</label>
-              <select id="input-mistake" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white">
-                <option value="None">None (Flawless Execution)</option>
-                <option value="Chased Entry">Chased Entry</option>
-                <option value="Moved Stop Loss">Moved Stop Loss</option>
-                <option value="Exited Too Early">Exited Too Early</option>
-                <option value="Oversized Risk">Oversized Risk</option>
-                <option value="Traded Outside Plan">Traded Outside Plan</option>
-              </select>
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Realized R (Multiple)</label>
+              <input id="input-quick-r" type="number" step="0.1" placeholder="e.g. 2.5 or -1.0" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-indigo-400 focus:outline-none focus:border-indigo-500" />
             </div>
             <div>
-              <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Followed Trade Plan 100%?</label>
-              <div class="flex items-center space-x-2 pt-1">
-                <label class="inline-flex items-center text-xs text-slate-300">
-                  <input type="radio" name="plan_followed" value="true" checked class="form-radio text-emerald-500 focus:ring-emerald-500" />
-                  <span class="ml-1.5">Yes (Disciplined)</span>
-                </label>
-                <label class="inline-flex items-center text-xs text-slate-300 ml-3">
-                  <input type="radio" name="plan_followed" value="false" class="form-radio text-rose-500 focus:ring-rose-500" />
-                  <span class="ml-1.5">No (Broke Rules)</span>
-                </label>
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Risk Amount ($)</label>
+              <input id="input-quick-risk" type="number" step="any" placeholder="e.g. 100" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-slate-300 focus:outline-none focus:border-slate-500" />
+            </div>
+          </div>
+
+          <!-- Optional Price Details Accordion (Collapsed by default so user doesn't have to write prices) -->
+          <div class="pt-1">
+            <button type="button" id="btn-toggle-detailed-prices" class="text-[11px] text-slate-400 hover:text-indigo-400 flex items-center space-x-1">
+              <i data-lucide="chevron-down" id="icon-price-accordion" class="w-3.5 h-3.5"></i>
+              <span>Optional: Enter exact Entry / Exit / SL prices</span>
+            </button>
+            <div id="detailed-prices-box" class="hidden grid grid-cols-4 gap-2 pt-2">
+              <div>
+                <label class="block text-[9px] text-slate-400 uppercase">Entry</label>
+                <input id="input-det-entry" type="number" step="any" placeholder="0.00" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-xs text-white" />
+              </div>
+              <div>
+                <label class="block text-[9px] text-slate-400 uppercase">Stop Loss</label>
+                <input id="input-det-sl" type="number" step="any" placeholder="0.00" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-xs text-white" />
+              </div>
+              <div>
+                <label class="block text-[9px] text-slate-400 uppercase">Exit Price</label>
+                <input id="input-det-exit" type="number" step="any" placeholder="0.00" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-xs text-white" />
+              </div>
+              <div>
+                <label class="block text-[9px] text-slate-400 uppercase">Quantity</label>
+                <input id="input-det-qty" type="number" step="any" placeholder="Shares/Lots" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-xs text-white" />
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Row 7: Notes & Screenshot Link -->
-        <div class="space-y-2">
-          <label class="block text-[11px] font-semibold text-slate-400 uppercase">Trade Notes & Key Lessons</label>
-          <textarea id="input-notes" rows="2" placeholder="Why did you take this trade? What did market structure look like? What would you do differently?" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"></textarea>
+        <!-- Row 2B: If Missed Trade Mode Active -->
+        <div id="section-missed-results" class="hidden p-3.5 bg-amber-950/20 rounded-2xl border border-amber-900/40 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-bold text-amber-300 uppercase">Potential Result If Taken</span>
+            <div class="flex items-center space-x-2">
+              <button type="button" class="chip-btn chip-win active missed-outcome-chip" data-val="WIN">📈 Would-be Win</button>
+              <button type="button" class="chip-btn chip-loss missed-outcome-chip" data-val="LOSS">📉 Would-be Loss</button>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Missed Potential P&L ($)</label>
+              <input id="input-missed-pnl" type="number" step="any" placeholder="+$350" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-amber-300 focus:outline-none" />
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Missed Potential R</label>
+              <input id="input-missed-r" type="number" step="0.1" placeholder="+3.0R" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-indigo-400 focus:outline-none" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Why Did You Miss It? (1-Click)</label>
+            <div class="flex flex-wrap gap-1.5" id="missed-reason-chips">
+              <button type="button" class="chip-btn active" data-val="Hesitation / Fear">😨 Hesitation / Fear</button>
+              <button type="button" class="chip-btn" data-val="Away from Screen">🚶 Away from Screen</button>
+              <button type="button" class="chip-btn" data-val="Order Didn't Fill">⌛ Limit Not Filled</button>
+              <button type="button" class="chip-btn" data-val="Second Guessing">❓ Second Guessing</button>
+              <button type="button" class="chip-btn" data-val="Analysis Paralysis">😵 Analysis Paralysis</button>
+            </div>
+          </div>
         </div>
 
-        <div>
-          <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Chart Screenshot (Image URL or paste TradingView link)</label>
-          <input id="input-chart-url" type="url" placeholder="https://www.tradingview.com/x/..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500" />
+        <!-- Row 3: Setup / Strategy (1-Click Chips) -->
+        <div class="space-y-1.5">
+          <label class="text-[11px] font-bold text-slate-400 uppercase">Setup / Strategy (1-Click)</label>
+          <div class="flex flex-wrap gap-1.5" id="strategy-chips">
+            <button type="button" class="chip-btn active" data-val="Breakout & Retest">Breakout & Retest</button>
+            <button type="button" class="chip-btn" data-val="Liquidity Sweep / FVG">Liquidity Sweep / FVG</button>
+            <button type="button" class="chip-btn" data-val="Trend Pullback (EMA)">Trend Pullback</button>
+            <button type="button" class="chip-btn" data-val="Order Block / S&D">Order Block</button>
+            <button type="button" class="chip-btn" data-val="Opening Range (ORB)">ORB</button>
+            <button type="button" class="chip-btn" data-val="VWAP / Mean Reversion">VWAP / Mean Reversion</button>
+            <button type="button" class="chip-btn" data-val="Support / Resistance">Support / Resistance</button>
+          </div>
+          <input type="hidden" id="input-trade-strategy" value="Breakout & Retest" />
+        </div>
+
+        <!-- Row 4: Rule Breaking & Execution Review (Most Important for Phase 1) -->
+        <div class="p-3.5 bg-slate-900/90 rounded-2xl border border-borderSubtle space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-white flex items-center space-x-1.5">
+              <i data-lucide="shield-alert" class="w-4 h-4 text-amber-400"></i>
+              <span>Execution Discipline & Rule Adherence</span>
+            </span>
+            <div class="flex items-center space-x-1.5">
+              <button type="button" id="btn-rule-followed" class="chip-btn chip-win active text-xs font-bold">
+                ✓ 100% Disciplined
+              </button>
+              <button type="button" id="btn-rule-broken" class="chip-btn chip-loss text-xs font-bold">
+                ⚠️ Broke Rules
+              </button>
+            </div>
+          </div>
+
+          <!-- If Rules Broken: Clickable Mistake Tags (Multi-select) -->
+          <div id="mistakes-container" class="hidden pt-1 space-y-1.5">
+            <span class="text-[10px] font-bold text-rose-300 uppercase block">What rule did you break? (Select all that apply)</span>
+            <div class="flex flex-wrap gap-1.5" id="mistake-chips">
+              <button type="button" class="chip-btn chip-mistake" data-val="FOMO / Chased Entry">🚀 FOMO / Chased</button>
+              <button type="button" class="chip-btn chip-mistake" data-val="Moved Stop Loss">⛔ Moved Stop Loss</button>
+              <button type="button" class="chip-btn chip-mistake" data-val="Exited Too Early">🏃 Exited Too Early</button>
+              <button type="button" class="chip-btn chip-mistake" data-val="Oversized Risk">💣 Oversized Risk</button>
+              <button type="button" class="chip-btn chip-mistake" data-val="No Valid Setup">🎲 No Setup / Bored</button>
+              <button type="button" class="chip-btn chip-mistake" data-val="Revenge Trade">😡 Revenge Trade</button>
+              <button type="button" class="chip-btn chip-mistake" data-val="Traded News Chop">📰 Traded News</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 5: Psychology State (1-Click Chips) -->
+        <div class="space-y-1.5">
+          <label class="text-[11px] font-bold text-slate-400 uppercase flex items-center space-x-1">
+            <i data-lucide="brain" class="w-3.5 h-3.5 text-purple-400"></i>
+            <span>Psychology / Emotional State (1-Click)</span>
+          </label>
+          <div class="flex flex-wrap gap-1.5" id="emotion-chips">
+            <button type="button" class="chip-btn chip-emotion active" data-val="Calm & Patient">🧘 Calm & Patient</button>
+            <button type="button" class="chip-btn chip-emotion" data-val="Confident / Focused">🎯 Confident</button>
+            <button type="button" class="chip-btn chip-emotion" data-val="Hesitation / Fear">😨 Hesitation / Fear</button>
+            <button type="button" class="chip-btn chip-emotion" data-val="Greed / FOMO">🚀 Greed / FOMO</button>
+            <button type="button" class="chip-btn chip-emotion" data-val="Frustrated / Revenge">😡 Revenge / Frustrated</button>
+            <button type="button" class="chip-btn chip-emotion" data-val="Boredom">🥱 Boredom</button>
+          </div>
+          <input type="hidden" id="input-trade-emotion" value="Calm & Patient" />
+        </div>
+
+        <!-- Row 6: COPY-PASTE SCREENSHOT DROPZONE (Direct Clipboard Ctrl+V Support) -->
+        <div class="space-y-1.5">
+          <label class="text-[11px] font-bold text-slate-400 uppercase flex items-center justify-between">
+            <span class="flex items-center space-x-1">
+              <i data-lucide="camera" class="w-3.5 h-3.5 text-indigo-400"></i>
+              <span>Chart Screenshot</span>
+            </span>
+            <span class="text-[10px] text-indigo-400">Press Ctrl+V anywhere to paste</span>
+          </label>
+
+          <!-- Dropzone box -->
+          <div id="screenshot-dropzone" class="paste-dropzone p-4 text-center relative overflow-hidden group">
+            <input type="file" id="file-screenshot-input" accept="image/*" class="hidden" />
+            
+            <!-- Default placeholder state -->
+            <div id="dropzone-empty-state" class="flex flex-col items-center justify-center space-y-1.5 py-2">
+              <div class="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                <i data-lucide="clipboard-paste" class="w-5 h-5"></i>
+              </div>
+              <div class="text-xs font-semibold text-white">
+                <span class="text-indigo-400 font-bold">Paste screenshot (Ctrl + V)</span> or click to upload
+              </div>
+              <p class="text-[10px] text-slate-500">Auto-compressed and stored directly in your Google Drive record</p>
+            </div>
+
+            <!-- Preview state when image is pasted -->
+            <div id="dropzone-preview-state" class="hidden flex-col items-center justify-center relative">
+              <img id="screenshot-preview-img" src="" alt="Screenshot" class="max-h-48 rounded-lg object-contain border border-slate-700 bg-black/60 shadow-lg" />
+              <div class="mt-2 flex items-center space-x-3">
+                <button type="button" id="btn-view-screenshot-fullscreen" class="px-2.5 py-1 rounded-lg text-xs bg-slate-800 hover:bg-slate-700 text-white flex items-center space-x-1">
+                  <i data-lucide="maximize-2" class="w-3 h-3"></i>
+                  <span>Fullscreen</span>
+                </button>
+                <button type="button" id="btn-remove-screenshot" class="px-2.5 py-1 rounded-lg text-xs bg-rose-950/80 hover:bg-rose-900 text-rose-300 flex items-center space-x-1">
+                  <i data-lucide="trash-2" class="w-3 h-3"></i>
+                  <span>Remove</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 7: 1 Key Lesson / Execution Review (1 line) -->
+        <div class="space-y-1">
+          <label class="block text-[11px] font-bold text-slate-400 uppercase">1 Key Takeaway / Lesson</label>
+          <input id="input-trade-notes" type="text" placeholder="e.g. Clean 5m sweep, followed plan 100%, exited at target." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500" />
         </div>
 
         <!-- Modal Footer Actions -->
-        <div class="pt-4 border-t border-borderSubtle flex items-center justify-between">
+        <div class="pt-3 border-t border-borderSubtle flex items-center justify-between">
           <button type="button" id="btn-delete-trade" class="hidden px-3 py-2 rounded-xl text-xs font-semibold text-rose-400 hover:text-white hover:bg-rose-600/30 transition">
             Delete Trade
           </button>
@@ -860,8 +821,8 @@
             <button type="button" id="btn-cancel-trade" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white bg-slate-800 transition">
               Cancel
             </button>
-            <button type="submit" id="btn-save-trade" class="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 transition">
-              Save Trade
+            <button type="submit" id="btn-save-trade" class="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 transition">
+              Save Entry
             </button>
           </div>
         </div>
@@ -869,66 +830,52 @@
     </div>
   </div>
 
-  <!-- MODAL: TRADE DETAIL / PREVIEW -->
-  <div id="modal-trade-detail" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
-    <div class="bg-cardBg border border-borderSubtle rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden transform transition-all">
-      <div class="bg-slate-900 px-6 py-4 border-b border-borderSubtle flex items-center justify-between">
-        <h3 id="detail-modal-title" class="text-base font-bold text-white">Trade Details</h3>
-        <button id="btn-close-detail-modal" class="text-slate-400 hover:text-white">
-          <i data-lucide="x" class="w-5 h-5"></i>
-        </button>
-      </div>
-      <div id="detail-modal-content" class="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
-        <!-- Rendered dynamically -->
-      </div>
+  <!-- MODAL: IMAGE LIGHTBOX (FULLSCREEN SCREENSHOT PREVIEW) -->
+  <div id="modal-lightbox" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-md hidden items-center justify-center p-4">
+    <div class="relative max-w-5xl w-full flex flex-col items-center">
+      <button id="btn-close-lightbox" class="absolute -top-10 right-0 text-slate-400 hover:text-white transition">
+        <i data-lucide="x" class="w-7 h-7"></i>
+      </button>
+      <img id="lightbox-img" src="" alt="Trade Chart" class="max-h-[85vh] max-w-full rounded-xl object-contain shadow-2xl border border-slate-800" />
+      <div id="lightbox-caption" class="mt-3 text-xs text-slate-300 font-semibold text-center"></div>
     </div>
   </div>
 
   <!-- MODAL: SETTINGS & NETLIFY GUIDE -->
   <div id="modal-settings" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4 overflow-y-auto">
-    <div class="bg-cardBg border border-borderSubtle rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden my-8 transform transition-all">
+    <div class="bg-cardBg border border-borderSubtle rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden my-8 transform transition-all">
       <div class="bg-slate-900 px-6 py-4 border-b border-borderSubtle flex items-center justify-between">
         <h3 class="text-base font-bold text-white flex items-center space-x-2">
           <i data-lucide="settings" class="w-5 h-5 text-indigo-400"></i>
-          <span>Journal Settings & Netlify Deployment</span>
+          <span>Journal Settings</span>
         </h3>
         <button id="btn-close-settings-modal" class="text-slate-400 hover:text-white">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
       <div class="p-6 space-y-6 max-h-[75vh] overflow-y-auto text-xs">
-        <!-- Starting Capital & Risk -->
         <div class="space-y-3 pb-4 border-b border-borderSubtle">
-          <h4 class="font-bold text-white uppercase text-xs tracking-wider">Account Baseline</h4>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label class="block text-slate-400 mb-1">Starting Account Balance ($)</label>
-              <input id="setting-initial-balance" type="number" step="any" value="10000" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white" />
-            </div>
-            <div>
-              <label class="block text-slate-400 mb-1">Max Risk Per Trade (%)</label>
-              <input id="setting-max-risk-pct" type="number" step="0.1" value="1.0" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white" />
-            </div>
+          <h4 class="font-bold text-white uppercase text-xs tracking-wider">Account Starting Capital</h4>
+          <div>
+            <label class="block text-slate-400 mb-1">Starting Account Balance ($)</label>
+            <input id="setting-initial-balance" type="number" step="any" value="10000" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white" />
           </div>
         </div>
 
-        <!-- Netlify Deployment Instructions -->
         <div class="space-y-2 pb-4 border-b border-borderSubtle">
           <h4 class="font-bold text-teal-400 uppercase text-xs tracking-wider flex items-center space-x-1.5">
             <i data-lucide="globe" class="w-4 h-4"></i>
             <span>Deploy to Netlify (Get Your Live URL)</span>
           </h4>
           <ol class="list-decimal list-inside space-y-1.5 text-slate-300 leading-relaxed">
-            <li>Open <a href="https://app.netlify.com/drop" target="_blank" class="text-teal-400 underline font-semibold">app.netlify.com/drop</a> in your browser.</li>
-            <li>Drag and drop this entire <code class="bg-slate-900 px-1 py-0.5 rounded text-white">trading-journal</code> folder directly into the upload box.</li>
-            <li>Netlify instantly provides your live HTTPS URL (e.g., <code class="text-teal-300">https://my-100-trades.netlify.app</code>)!</li>
-            <li>Add this URL as an Authorized Origin in your Google Cloud Console for Google Drive OAuth.</li>
+            <li>Open <a href="https://app.netlify.com/drop" target="_blank" class="text-teal-400 underline font-semibold">app.netlify.com/drop</a>.</li>
+            <li>Drag and drop the <code class="bg-slate-900 px-1 py-0.5 rounded text-white">trading-journal</code> folder directly into the upload box.</li>
+            <li>Netlify instantly provides your live HTTPS URL.</li>
           </ol>
         </div>
 
-        <!-- Data Reset -->
         <div class="space-y-2">
-          <h4 class="font-bold text-rose-400 uppercase text-xs tracking-wider">Danger Zone</h4>
+          <h4 class="font-bold text-rose-400 uppercase text-xs tracking-wider">Reset Data</h4>
           <p class="text-slate-400">Clear all trades and start fresh with Trade #1.</p>
           <button id="btn-reset-data" class="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-600/20 text-rose-400 border border-rose-500/30 hover:bg-rose-600 hover:text-white transition">
             Delete All Trades
