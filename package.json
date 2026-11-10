@@ -1,0 +1,23 @@
+{
+  "name": "100-trades-journal",
+  "version": "1.0.0",
+  "description": "Professional 100-trade execution journal with Google Drive cloud sync and Netlify deployment",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx serve .",
+    "dev": "npx serve .",
+    "deploy": "npx netlify-cli deploy --prod"
+  },
+  "keywords": [
+    "trading",
+    "journal",
+    "google-drive",
+    "netlify",
+    "stocks",
+    "crypto",
+    "forex",
+    "futures"
+  ],
+  "author": "Trader",
+  "license": "MIT"
+}
