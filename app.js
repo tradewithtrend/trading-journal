@@ -47,6 +47,13 @@ const TradeApp = (function() {
     bindPasteAndUpload();
     GoogleDriveSync.init();
     renderAll();
+
+    // Auto-sync with Google Sheet on startup if connected and local journal is empty
+    if (GoogleDriveSync.hasWebhook() || GoogleDriveSync.isAuthenticated()) {
+      if (trades.length === 0) {
+        GoogleDriveSync.smartSync({ notify: false, silentIfEmpty: true });
+      }
+    }
   }
 
   // Password & Authentication Gate Engine
@@ -1322,8 +1329,14 @@ const TradeApp = (function() {
 
     // Top buttons
     document.getElementById('btn-open-new-trade').addEventListener('click', () => openTradeModal());
-    document.getElementById('header-gdrive-pill').addEventListener('click', () => document.getElementById('nav-btn-gdrive').click());
-    document.getElementById('btn-backup-drive').addEventListener('click', () => GoogleDriveSync.syncToDrive());
+    document.getElementById('header-gdrive-pill').addEventListener('click', () => {
+      if (GoogleDriveSync.hasWebhook() || GoogleDriveSync.isAuthenticated()) {
+        GoogleDriveSync.smartSync({ notify: true, silentIfEmpty: false });
+      } else {
+        document.getElementById('nav-btn-gdrive').click();
+      }
+    });
+    document.getElementById('btn-backup-drive').addEventListener('click', () => GoogleDriveSync.smartSync({ notify: true, silentIfEmpty: false }));
     document.getElementById('btn-export-csv').addEventListener('click', () => GoogleDriveSync.exportCsv(trades));
     document.getElementById('btn-load-samples').addEventListener('click', () => {
       if (confirm('Load demo trades to preview analytics?')) loadDemoTrades();
@@ -1382,6 +1395,8 @@ const TradeApp = (function() {
     // Empty state
     const emptyAdd = document.getElementById('btn-empty-add-trade');
     if (emptyAdd) emptyAdd.addEventListener('click', () => openTradeModal());
+    const emptySync = document.getElementById('btn-empty-sync-sheet');
+    if (emptySync) emptySync.addEventListener('click', () => GoogleDriveSync.smartSync({ notify: true, silentIfEmpty: false }));
     const emptyDemo = document.getElementById('btn-empty-demo');
     if (emptyDemo) emptyDemo.addEventListener('click', () => loadDemoTrades());
 
@@ -1583,13 +1598,38 @@ const TradeApp = (function() {
     });
 
     document.getElementById('btn-view-apps-script').addEventListener('click', () => {
-      alert(
-        "Open drive.google.com -> Create a Google Sheet.\n" +
-        "Click Extensions -> Apps Script.\n" +
-        "Paste the code from google-apps-script.js and Deploy as Web App.\n" +
-        "Then paste your Web App URL here!"
-      );
+      GoogleDriveSync.openAppsScriptModal();
     });
+
+    const closeScriptModalBtn = document.getElementById('btn-close-apps-script-modal');
+    if (closeScriptModalBtn) {
+      closeScriptModalBtn.addEventListener('click', () => GoogleDriveSync.closeAppsScriptModal());
+    }
+
+    const quickRestoreBtn = document.getElementById('btn-quick-restore-trade1');
+    if (quickRestoreBtn) {
+      quickRestoreBtn.addEventListener('click', () => GoogleDriveSync.restoreTrade1Directly());
+    }
+
+    const copyScriptBtn = document.getElementById('btn-copy-script-code');
+    if (copyScriptBtn) {
+      copyScriptBtn.addEventListener('click', () => {
+        const area = document.getElementById('apps-script-code-area');
+        if (area && area.value) {
+          navigator.clipboard.writeText(area.value).then(() => {
+            const btnText = document.getElementById('btn-copy-script-text');
+            if (btnText) btnText.textContent = 'Copied!';
+            GoogleDriveSync.showToast('Copied script code to clipboard!', 'success');
+            setTimeout(() => { if (btnText) btnText.textContent = 'Copy Script Code'; }, 2000);
+          });
+        }
+      });
+    }
+
+    const testConnBtn = document.getElementById('btn-test-sheet-connection');
+    if (testConnBtn) {
+      testConnBtn.addEventListener('click', () => GoogleDriveSync.testSheetConnection());
+    }
   }
 
   return {

@@ -70,6 +70,14 @@ const GoogleDriveSync = (function() {
     return accessToken && Date.now() < tokenExpiresAt;
   }
 
+  function hasWebhook() {
+    return Boolean(webhookUrl && webhookUrl.trim().length > 10);
+  }
+
+  function getWebhookUrl() {
+    return webhookUrl;
+  }
+
   function connect() {
     if (!clientId) {
       showToast('Please enter your Google OAuth Client ID in Settings first.', 'error');
@@ -90,7 +98,6 @@ const GoogleDriveSync = (function() {
       }
     }
 
-    // Trigger Google Sign-in popup
     tokenClient.requestAccessToken({ prompt: isAuthenticated() ? '' : 'consent' });
   }
 
@@ -113,7 +120,7 @@ const GoogleDriveSync = (function() {
 
     // 1. If Webhook URL is set, send to Google Sheet webhook
     if (webhookUrl) {
-      syncToGoogleSheetWebhook(payload);
+      await syncToGoogleSheetWebhook(payload);
       syncedAnywhere = true;
     }
 
@@ -125,7 +132,7 @@ const GoogleDriveSync = (function() {
         const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         localStorage.setItem(STORAGE_KEY_LAST_SYNC, nowStr);
         updateStatusUI('connected', 'Synced (' + nowStr + ')');
-        showToast(`Synced ${trades.length} trades to Google Drive!`, 'success');
+        showToast(`Synced ${trades.length} trade(s) to Google Drive!`, 'success');
         syncedAnywhere = true;
       } catch (err) {
         console.error('Error syncing to Google Drive:', err);
@@ -135,7 +142,7 @@ const GoogleDriveSync = (function() {
     }
 
     if (!syncedAnywhere && !isAuthenticated() && !webhookUrl) {
-      showToast('Google Drive not configured yet. Downloaded backup copy locally.', 'info');
+      showToast('No cloud sync configured. Downloaded local backup copy.', 'info');
       exportJson(trades);
     }
   }
@@ -144,23 +151,19 @@ const GoogleDriveSync = (function() {
   async function saveJsonFileToDrive(dataObj) {
     const content = JSON.stringify(dataObj, null, 2);
 
-    // If we don't have a fileId, search for existing file first
     if (!fileId) {
       fileId = await findExistingFile(DRIVE_FILE_NAME);
     }
 
     if (fileId) {
-      // Update existing file
       await updateDriveFile(fileId, content, 'application/json');
     } else {
-      // Create new file
       fileId = await createDriveFile(DRIVE_FILE_NAME, content, 'application/json');
       if (fileId) {
         localStorage.setItem(STORAGE_KEY_FILE_ID, fileId);
       }
     }
 
-    // Update UI link to file
     if (fileId) {
       const fileLinkEl = document.getElementById('gdrive-open-file-link');
       if (fileLinkEl) {
@@ -249,7 +252,6 @@ const GoogleDriveSync = (function() {
     );
 
     if (!res.ok) {
-      // If 404, file might have been deleted from Drive, clear cached ID and re-create
       if (res.status === 404) {
         localStorage.removeItem(STORAGE_KEY_FILE_ID);
         fileId = null;
@@ -262,75 +264,101 @@ const GoogleDriveSync = (function() {
     return await res.json();
   }
 
-  // Pull / download data from Google Drive (Supports both Google Sheet Webhook and Drive OAuth)
-  async function pullFromDrive() {
-    // 1. If using Google Sheet Webhook
+  // Smart Two-Way Synchronizer (Pulls remote trades, merges, and updates UI)
+  async function smartSync(options = { notify: true, silentIfEmpty: false }) {
     if (webhookUrl) {
-      updateStatusUI('syncing', 'Pulling from Sheet...');
+      updateStatusUI('syncing', 'Syncing Sheet...');
       try {
-        const res = await fetch(webhookUrl);
-        const data = await res.json();
+        const res = await fetch(webhookUrl, { cache: 'no-store' });
+        const text = await res.text();
+        let data = null;
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          console.error('Non-JSON response from Google Apps Script:', text);
+          throw new Error('Google Apps Script did not return JSON. Please verify web app access is set to "Anyone".');
+        }
+
         if (data && data.status === 'success' && Array.isArray(data.trades)) {
-          if (data.trades.length === 0) {
-            showToast('Your Google Sheet is currently empty.', 'info');
+          const remoteTrades = data.trades;
+          const localTrades = TradeApp.getTrades() || [];
+
+          if (remoteTrades.length === 0 && localTrades.length === 0) {
+            if (!options.silentIfEmpty && options.notify) {
+              showToast('Google Sheet is connected, but has no trades yet.', 'info');
+            }
+          } else if (remoteTrades.length > 0 && localTrades.length === 0) {
+            // Restore all remote trades to local
+            TradeApp.setTrades(remoteTrades);
+            if (options.notify) {
+              showToast(`Restored ${remoteTrades.length} trade(s) from your Google Sheet!`, 'success');
+            }
+          } else if (remoteTrades.length === 0 && localTrades.length > 0) {
+            // Push local trades to remote sheet
+            await syncToGoogleSheetWebhook({ trades: localTrades });
+            if (options.notify) {
+              showToast(`Backed up ${localTrades.length} trade(s) to your Google Sheet!`, 'success');
+            }
           } else {
-            TradeApp.setTrades(data.trades);
-            showToast(`Restored ${data.trades.length} trades from Google Sheet!`, 'success');
+            // Merge both sets by tradeNum
+            const mergedMap = new Map();
+            localTrades.forEach(t => mergedMap.set(parseInt(t.tradeNum, 10), t));
+            remoteTrades.forEach(t => mergedMap.set(parseInt(t.tradeNum, 10), t));
+            const mergedList = Array.from(mergedMap.values())
+              .sort((a, b) => (parseInt(a.tradeNum, 10) || 0) - (parseInt(b.tradeNum, 10) || 0));
+
+            TradeApp.setTrades(mergedList);
+            if (options.notify) {
+              showToast(`Synchronized ${mergedList.length} trade(s) with Google Sheet!`, 'success');
+            }
+
+            if (mergedList.length > remoteTrades.length) {
+              syncToGoogleSheetWebhook({ trades: mergedList });
+            }
           }
+
+          const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          localStorage.setItem(STORAGE_KEY_LAST_SYNC, nowStr);
+          const lastSyncEl = document.getElementById('gdrive-last-synced');
+          if (lastSyncEl) lastSyncEl.textContent = nowStr;
+
+          updateStatusUI('connected', 'Sheet: Synced');
+          return { success: true, count: TradeApp.getTrades().length };
+        } else if (data && data.status === 'online') {
+          // Old Google Apps Script version deployed
+          openAppsScriptModal();
+          showToast('Google Sheet Webhook is active! Deploy "New version" in Apps Script to enable reading rows.', 'info');
+          updateStatusUI('connected', 'Sheet: Active');
+          return { success: false, reason: 'script_v1' };
         } else {
-          showToast('Google Sheet returned: ' + (data?.message || 'No trades'), 'info');
+          showToast('Google Sheet: ' + (data?.message || 'Empty response'), 'info');
+          updateStatusUI('connected', 'Sheet: Synced');
+          return { success: false, reason: data?.message };
         }
-        updateStatusUI('connected', 'Sheet: Synced');
       } catch (err) {
-        console.error('Error pulling from Sheet Webhook:', err);
-        showToast('Failed to pull from Google Sheet: ' + err.message, 'error');
-        updateStatusUI('error', 'Pull Error');
-      }
-      return;
-    }
-
-    // 2. If using OAuth Drive API
-    if (!isAuthenticated()) {
-      showToast('Please connect to Google Drive first.', 'error');
-      connect();
-      return;
-    }
-
-    try {
-      updateStatusUI('syncing', 'Pulling...');
-      if (!fileId) {
-        fileId = await findExistingFile(DRIVE_FILE_NAME);
-      }
-
-      if (!fileId) {
-        showToast('No journal file found in Google Drive yet.', 'info');
-        updateStatusUI('connected', 'Connected');
-        return;
-      }
-
-      const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-
-      if (!res.ok) {
-        throw new Error(`Failed to read file: ${res.statusText}`);
-      }
-
-      const remoteData = await res.json();
-      if (remoteData && remoteData.trades && Array.isArray(remoteData.trades)) {
-        if (confirm(`Found ${remoteData.trades.length} trades on Google Drive. Replace current local trades with Google Drive copy?`)) {
-          TradeApp.setTrades(remoteData.trades);
-          showToast(`Successfully restored ${remoteData.trades.length} trades from Google Drive!`, 'success');
+        console.error('Smart sync error:', err);
+        if (!options.silentIfEmpty && options.notify) {
+          showToast('Failed to sync from Google Sheet: ' + err.message, 'error');
         }
-      } else {
-        showToast('Google Drive file has invalid structure.', 'error');
+        updateStatusUI('error', 'Sync Error');
+        return { success: false, error: err };
       }
-      updateStatusUI('connected', 'Connected');
-    } catch (err) {
-      console.error('Error pulling from Drive:', err);
-      showToast('Error pulling from Drive: ' + err.message, 'error');
-      updateStatusUI('error', 'Error');
     }
+
+    // Direct Google Drive OAuth fallback
+    if (isAuthenticated()) {
+      return pullFromDrive();
+    } else {
+      if (options.notify && !options.silentIfEmpty) {
+        showToast('Google Drive/Sheet not configured yet. Open Google Drive Sync settings.', 'info');
+      }
+      return { success: false, reason: 'not_connected' };
+    }
+  }
+
+  // Pull / download data from Google Drive (Supports both Google Sheet Webhook and Drive OAuth)
+  async function pullFromDrive(silent = false) {
+    return smartSync({ notify: !silent, silentIfEmpty: silent });
   }
 
   // Google Sheets Webhook Sync (Alternate zero-OAuth solution)
@@ -339,7 +367,6 @@ const GoogleDriveSync = (function() {
 
     updateStatusUI('syncing', 'Syncing Sheet...');
     try {
-      // Uses standard no-cors POST to Google Apps Script Web App
       await fetch(webhookUrl, {
         method: 'POST',
         mode: 'no-cors',
@@ -369,7 +396,7 @@ const GoogleDriveSync = (function() {
   // Refresh status based on active connection mode
   function refreshStatus() {
     if (webhookUrl) {
-      updateStatusUI('connected', 'Sheet: Active');
+      updateStatusUI('connected', 'Sheet: Synced');
       const desc = document.getElementById('gdrive-status-desc');
       if (desc) desc.textContent = 'Connected (Google Sheet)';
       const fileNameEl = document.getElementById('gdrive-file-name');
@@ -391,18 +418,17 @@ const GoogleDriveSync = (function() {
 
     if (!dot || !pillLabel) return;
 
-    // Reset styles
     dot.className = 'w-2 h-2 rounded-full';
-    syncIcon.classList.remove('animate-spin');
+    if (syncIcon) syncIcon.classList.remove('animate-spin');
 
     if (status === 'connected') {
       dot.classList.add('bg-emerald-400');
       pillLabel.textContent = label || 'Drive: Synced';
-      if (desc) desc.textContent = 'Connected (Google Drive)';
+      if (desc) desc.textContent = 'Connected (Google Sheet)';
       if (circle) circle.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
     } else if (status === 'syncing') {
       dot.classList.add('bg-indigo-400');
-      syncIcon.classList.add('animate-spin');
+      if (syncIcon) syncIcon.classList.add('animate-spin');
       pillLabel.textContent = label || 'Drive: Syncing...';
       if (desc) desc.textContent = 'Syncing to Drive...';
       if (circle) circle.className = 'w-2.5 h-2.5 rounded-full bg-indigo-400 animate-pulse';
@@ -444,6 +470,106 @@ const GoogleDriveSync = (function() {
       toast.style.transition = 'opacity 0.3s ease';
       setTimeout(() => toast.remove(), 300);
     }, 4000);
+  }
+
+  // Open Apps Script Modal
+  function openAppsScriptModal() {
+    const modal = document.getElementById('modal-apps-script');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    populateScriptCodeArea();
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  function closeAppsScriptModal() {
+    const modal = document.getElementById('modal-apps-script');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  // Populate script code area in modal
+  async function populateScriptCodeArea() {
+    const textarea = document.getElementById('apps-script-code-area');
+    if (!textarea) return;
+    try {
+      const res = await fetch('google-apps-script.js');
+      if (res.ok) {
+        textarea.value = await res.text();
+      }
+    } catch (e) {
+      console.warn('Could not load google-apps-script.js directly:', e);
+    }
+  }
+
+  // Restore Trade #1 (ETH) into journal directly
+  function restoreTrade1Directly() {
+    const sampleTrade1 = {
+      id: 'trade_1_' + Date.now(),
+      tradeNum: 1,
+      date: new Date().toISOString().slice(0, 16),
+      isMissed: false,
+      symbol: 'ETH',
+      direction: 'LONG',
+      realizedPnL: 0,
+      realizedR: 0,
+      outcome: 'WIN',
+      strategy: 'Breakout & Retest',
+      planFollowed: true,
+      mistakes: [],
+      emotion: 'Calm & Patient',
+      missedReason: '',
+      notes: 'Trade #1 of 100-Trade Journey. Executed with plan and discipline!'
+    };
+
+    TradeApp.setTrades([sampleTrade1]);
+    showToast('Restored Trade #1 (ETH LONG WIN) into your journal!', 'success');
+    closeAppsScriptModal();
+  }
+
+  // Test Webhook Connection live
+  async function testSheetConnection() {
+    const indicator = document.getElementById('script-test-indicator');
+    const statusText = document.getElementById('script-test-status');
+
+    if (!webhookUrl) {
+      if (statusText) statusText.textContent = 'Please enter a Google Apps Script Webhook URL first in Settings.';
+      if (indicator) indicator.className = 'w-2.5 h-2.5 rounded-full bg-rose-500';
+      return;
+    }
+
+    if (indicator) indicator.className = 'w-2.5 h-2.5 rounded-full bg-indigo-500 animate-spin';
+    if (statusText) statusText.textContent = 'Testing connection & querying Google Sheet...';
+
+    try {
+      const res = await fetch(webhookUrl, { cache: 'no-store' });
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        throw new Error('Google Apps Script did not return JSON. Make sure Web App access is set to "Anyone".');
+      }
+
+      if (data && data.status === 'success' && Array.isArray(data.trades)) {
+        if (indicator) indicator.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
+        if (statusText) statusText.textContent = `Connected! Found ${data.trades.length} trade(s) in your Google Sheet.`;
+        if (data.trades.length > 0) {
+          TradeApp.setTrades(data.trades);
+          showToast(`Loaded ${data.trades.length} trade(s) from Google Sheet!`, 'success');
+        }
+      } else if (data && data.status === 'online') {
+        if (indicator) indicator.className = 'w-2.5 h-2.5 rounded-full bg-amber-400';
+        if (statusText) statusText.textContent = 'Webhook is online, but running script v1. Please deploy "New version" (Step 4 above).';
+      } else {
+        if (indicator) indicator.className = 'w-2.5 h-2.5 rounded-full bg-rose-500';
+        if (statusText) statusText.textContent = 'Response: ' + (data.message || 'Unknown response');
+      }
+    } catch (err) {
+      if (indicator) indicator.className = 'w-2.5 h-2.5 rounded-full bg-rose-500';
+      if (statusText) statusText.textContent = 'Connection error: ' + err.message;
+    }
   }
 
   // Export JSON file locally
@@ -547,7 +673,6 @@ const GoogleDriveSync = (function() {
         lastSyncEl.textContent = lastSync;
       }
 
-      // Check if file ID already cached
       if (fileId) {
         const linkEl = document.getElementById('gdrive-open-file-link');
         if (linkEl) {
@@ -556,7 +681,6 @@ const GoogleDriveSync = (function() {
         }
       }
 
-      // Try initializing GIS if available
       if (typeof google !== 'undefined' && google.accounts && clientId) {
         initClient();
       }
@@ -564,6 +688,14 @@ const GoogleDriveSync = (function() {
     connect,
     syncToDrive,
     pullFromDrive,
+    smartSync,
+    hasWebhook,
+    getWebhookUrl,
+    isAuthenticated,
+    openAppsScriptModal,
+    closeAppsScriptModal,
+    restoreTrade1Directly,
+    testSheetConnection,
     exportCsv,
     exportJson,
     showToast,
@@ -591,8 +723,8 @@ const GoogleDriveSync = (function() {
       refreshStatus();
       showToast('Google Sheet Webhook saved & connected!', 'success');
 
-      // Trigger automatic sync immediately
-      syncToDrive();
+      // Trigger automatic smartSync immediately
+      smartSync({ notify: true, silentIfEmpty: false });
     }
   };
 })();

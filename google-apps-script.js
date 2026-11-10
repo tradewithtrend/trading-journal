@@ -1,19 +1,21 @@
 /**
  * Google Apps Script Web App for 100 Trades Journal
+ * Two-Way Realtime Sync with Google Drive Spreadsheet
  * 
- * HOW TO SET THIS UP IN 1 MINUTE:
- * 1. Go to Google Drive (https://drive.google.com).
- * 2. Click "+ New" -> "Google Sheets" and name it "100 Trades Trading Journal".
- * 3. In the top menu, click "Extensions" -> "Apps Script".
- * 4. Delete any code in the editor, paste this entire file, and click Save (💾).
- * 5. Click "Deploy" (top right) -> "New deployment".
- * 6. Select type: "Web app".
- * 7. Set:
- *    - Description: "Trading Journal Sync"
- *    - Execute as: "Me" (your Google account)
- *    - Who has access: "Anyone" (allows your Netlify web app to send trade data securely)
- * 8. Click "Deploy", copy the "Web app URL" (starts with https://script.google.com/macros/s/...)
- * 9. Paste this URL into the "Google Sheet Webhook URL" in your Trading Journal settings!
+ * =========================================================================
+ * HOW TO UPDATE / DEPLOY IN 30 SECONDS:
+ * =========================================================================
+ * 1. Open your Google Sheet in Google Drive.
+ * 2. In the top menu, click: Extensions -> Apps Script.
+ * 3. Replace all code in the editor with this entire file.
+ * 4. Click the Save icon (💾).
+ * 5. Click "Deploy" (top right button) -> "Manage deployments".
+ * 6. Click the Pencil icon (Edit) on your active deployment.
+ * 7. Under "Version", select: "New version".
+ * 8. Click "Deploy" -> Click "Done".
+ * 
+ * That's it! Your journal web app can now automatically read & write trades!
+ * =========================================================================
  */
 
 function doPost(e) {
@@ -22,14 +24,14 @@ function doPost(e) {
     var data = JSON.parse(rawData);
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
 
-    // If sheet is empty, create headers
+    // If sheet is empty, setup headers
     if (sheet.getLastRow() === 0) {
       setupHeaders(sheet);
     }
 
     var trades = data.trades || [];
 
-    // Clear existing data rows if receiving a full sync
+    // Clear existing data rows if receiving a valid sync payload
     if (trades.length > 0) {
       var lastRow = sheet.getLastRow();
       var lastCol = sheet.getLastColumn() || 14;
@@ -66,6 +68,7 @@ function doPost(e) {
 
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
+      tradesCount: trades.length,
       message: "Synced " + trades.length + " trades to Google Drive Spreadsheet!"
     })).setMimeType(ContentService.MimeType.JSON);
 
@@ -104,14 +107,24 @@ function doGet(e) {
     var trades = data.map(function(row, idx) {
       var isMissed = String(row[2]).toLowerCase().indexOf('missed') !== -1;
       var mistakesStr = String(row[10] || '');
-      var mistakes = mistakesStr ? mistakesStr.split(';').map(function(s) { return s.trim(); }) : [];
+      var mistakes = mistakesStr ? mistakesStr.split(';').map(function(s) { return s.trim(); }).filter(Boolean) : [];
       var pnlVal = parseFloat(row[5]) || 0;
       var rVal = parseFloat(row[6]) || 0;
+      
+      var rawDate = row[1];
+      var dateStr = '';
+      if (rawDate instanceof Date) {
+        dateStr = rawDate.toISOString();
+      } else {
+        dateStr = String(rawDate || '');
+      }
+
+      var tradeNum = parseInt(row[0], 10) || (idx + 1);
 
       return {
-        id: 'sheet_' + (idx + 1) + '_' + Date.now(),
-        tradeNum: parseInt(row[0]) || (idx + 1),
-        date: row[1] || '',
+        id: 'trade_' + tradeNum + '_' + (Date.now() + idx),
+        tradeNum: tradeNum,
+        date: dateStr,
         isMissed: isMissed,
         symbol: String(row[3] || '').toUpperCase(),
         direction: String(row[4] || 'LONG').toUpperCase(),
@@ -119,7 +132,7 @@ function doGet(e) {
         realizedR: !isMissed ? rVal : 0,
         missedPnL: isMissed ? pnlVal : 0,
         missedR: isMissed ? rVal : 0,
-        outcome: String(row[7] || (isMissed ? 'MISSED' : 'WIN')),
+        outcome: String(row[7] || (isMissed ? 'MISSED' : 'WIN')).toUpperCase(),
         strategy: String(row[8] || 'Breakout & Retest'),
         planFollowed: String(row[9]).toLowerCase().indexOf('yes') !== -1,
         mistakes: mistakes,
@@ -129,10 +142,17 @@ function doGet(e) {
       };
     });
 
-    return ContentService.createTextOutput(JSON.stringify({ status: "success", trades: trades }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      trades: trades,
+      count: trades.length,
+      syncedAt: new Date().toISOString()
+    })).setMimeType(ContentService.MimeType.JSON);
+
   } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
   }
 }
