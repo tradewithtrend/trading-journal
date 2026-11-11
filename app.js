@@ -226,7 +226,49 @@ const TradeApp = (function() {
     maxRiskPct: 1.0,
     dailyLossLimit: 100,
     dailyTradeLimit: 3,
+    updatedAt: 0,
   };
+  let lastSettingsSaveAt = 0;
+
+  const NAV_TABS = [
+    { btn: 'nav-btn-trades', mobBtn: 'mobile-nav-btn-trades', view: 'view-trades' },
+    { btn: 'nav-btn-analytics', mobBtn: 'mobile-nav-btn-analytics', view: 'view-analytics' },
+    { btn: 'nav-btn-roadmap', mobBtn: 'mobile-nav-btn-roadmap', view: 'view-roadmap' },
+    { btn: 'nav-btn-gdrive', mobBtn: 'mobile-nav-btn-gdrive', view: 'view-gdrive' },
+  ];
+
+  function switchTab(viewId) {
+    sessionStorage.setItem('tj_active_view', viewId);
+    NAV_TABS.forEach(t => {
+      const desktopBtn = document.getElementById(t.btn);
+      const mobBtn = document.getElementById(t.mobBtn);
+      const viewEl = document.getElementById(t.view);
+
+      if (t.view === viewId) {
+        if (desktopBtn) {
+          desktopBtn.className = 'nav-tab active px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-all text-white bg-indigo-600 shadow-sm';
+        }
+        if (mobBtn) {
+          mobBtn.className = 'mobile-nav-item active flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-bold text-indigo-600 transition';
+        }
+        if (viewEl) viewEl.classList.remove('hidden');
+        if (t.view === 'view-analytics') {
+          renderCharts();
+          if (typeof GoogleDriveSync !== 'undefined' && GoogleDriveSync.syncIfStale) {
+            GoogleDriveSync.syncIfStale(10000);
+          }
+        }
+      } else {
+        if (desktopBtn) {
+          desktopBtn.className = 'nav-tab px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-all text-slate-400 hover:text-white hover:bg-slate-800';
+        }
+        if (mobBtn) {
+          mobBtn.className = 'mobile-nav-item flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium text-slate-400 hover:text-indigo-600 transition';
+        }
+        if (viewEl) viewEl.classList.add('hidden');
+      }
+    });
+  }
 
   // Active filter state
   let currentFilter = {
@@ -332,6 +374,7 @@ const TradeApp = (function() {
     bindEvents();
     bindPasteAndUpload();
     GoogleDriveSync.init();
+    updateLimitsSyncBadge();
     renderAll();
 
     // Restore active tab
@@ -503,6 +546,11 @@ const TradeApp = (function() {
   function syncLimitInputs() {
     const lossVal = parseNonNegLimit(settings.dailyLossLimit, 100);
     const tradeVal = Math.floor(parseNonNegLimit(settings.dailyTradeLimit, 3));
+    const balVal = parseFloat(settings.initialBalance);
+    const balClean = (!isNaN(balVal) && balVal > 0) ? balVal : 10000;
+    const balanceInput = document.getElementById('setting-initial-balance');
+    if (balanceInput) balanceInput.value = balClean;
+
     ['setting-daily-loss-limit', 'analytics-daily-loss-limit'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = lossVal;
@@ -513,34 +561,145 @@ const TradeApp = (function() {
     });
   }
 
+  function settingsValuesDiffer(a, b) {
+    return (
+      parseFloat(a?.initialBalance) !== parseFloat(b?.initialBalance) ||
+      parseNonNegLimit(a?.dailyLossLimit, 100) !== parseNonNegLimit(b?.dailyLossLimit, 100) ||
+      Math.floor(parseNonNegLimit(a?.dailyTradeLimit, 3)) !== Math.floor(parseNonNegLimit(b?.dailyTradeLimit, 3))
+    );
+  }
+
+  function updateLimitsSyncBadge() {
+    const badgeEl = document.getElementById('daily-limits-sync-status');
+    const updateBtn = document.getElementById('btn-limits-update-script');
+    if (!badgeEl && !updateBtn) return;
+
+    const hasCloud = typeof GoogleDriveSync !== 'undefined' && (GoogleDriveSync.hasWebhook() || GoogleDriveSync.isAuthenticated());
+    const supported = typeof GoogleDriveSync !== 'undefined' && GoogleDriveSync.isSettingsSyncSupported ? GoogleDriveSync.isSettingsSyncSupported() : null;
+
+    if (!hasCloud) {
+      if (badgeEl) {
+        badgeEl.textContent = 'Local Browser Only';
+        badgeEl.className = 'inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-500/15 text-slate-400';
+      }
+      if (updateBtn) updateBtn.classList.add('hidden');
+      return;
+    }
+
+    if (GoogleDriveSync.hasWebhook() && supported === false) {
+      if (badgeEl) badgeEl.classList.add('hidden');
+      if (updateBtn) updateBtn.classList.remove('hidden');
+      return;
+    }
+
+    if (updateBtn) updateBtn.classList.add('hidden');
+    if (badgeEl) {
+      badgeEl.textContent = supported === true ? 'Synced Across Browsers' : 'Cloud Sync Ready';
+      badgeEl.className = 'inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-500';
+    }
+  }
+
   function loadSettings() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_SETTINGS);
       if (saved) {
-        settings = Object.assign(settings, JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        const hadTimestamp = parsed && parsed.updatedAt !== undefined && parsed.updatedAt !== null;
+        settings = Object.assign(settings, parsed);
+        if (!hadTimestamp) {
+          const differsFromDefaults =
+            Number(settings.initialBalance) !== 10000 ||
+            Number(settings.maxRiskPct) !== 1.0 ||
+            Number(settings.dailyLossLimit) !== 100 ||
+            Number(settings.dailyTradeLimit) !== 3;
+          settings.updatedAt = differsFromDefaults ? Date.now() : 0;
+          if (differsFromDefaults) {
+            localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
+          }
+        } else {
+          settings.updatedAt = Number(settings.updatedAt) || 0;
+        }
       }
-      const balanceInput = document.getElementById('setting-initial-balance');
-      if (balanceInput) balanceInput.value = settings.initialBalance;
       syncLimitInputs();
     } catch (e) {
       console.warn('Could not load settings:', e);
     }
   }
 
-  function saveSettings(source = 'settings') {
+  function applyRemoteSettings(remoteRaw, { notify = true } = {}) {
+    if (!remoteRaw || typeof remoteRaw !== 'object') return false;
+    const balParsed = parseFloat(remoteRaw.initialBalance);
+    const riskParsed = parseFloat(remoteRaw.maxRiskPct);
+    const next = {
+      initialBalance: (!isNaN(balParsed) && balParsed > 0) ? balParsed : (settings.initialBalance || 10000),
+      maxRiskPct: (!isNaN(riskParsed) && riskParsed >= 0) ? riskParsed : (settings.maxRiskPct ?? 1.0),
+      dailyLossLimit: parseNonNegLimit(remoteRaw.dailyLossLimit, settings.dailyLossLimit ?? 100),
+      dailyTradeLimit: Math.floor(parseNonNegLimit(remoteRaw.dailyTradeLimit, settings.dailyTradeLimit ?? 3)),
+      updatedAt: Number(remoteRaw.updatedAt) || settings.updatedAt || 0,
+    };
+
+    const changed = settingsValuesDiffer(settings, next);
+    const newerTimestamp = next.updatedAt > (Number(settings.updatedAt) || 0);
+    if (!changed && !newerTimestamp) return false;
+
+    settings = Object.assign(settings, next);
+    localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
+    syncLimitInputs();
+
+    if (changed) {
+      renderKPIs();
+      renderCharts();
+      updateModalDailyLimitWarning();
+      if (notify && typeof GoogleDriveSync !== 'undefined' && GoogleDriveSync.showToast) {
+        GoogleDriveSync.showToast(
+          `Synced limits from Google Sheet ($${settings.dailyLossLimit} max loss, ${settings.dailyTradeLimit}/day)`,
+          'info'
+        );
+      }
+    }
+    return changed;
+  }
+
+  function saveSettings(source = 'settings', opts = {}) {
     const balanceInput = document.getElementById('setting-initial-balance');
-    if (balanceInput) settings.initialBalance = parseFloat(balanceInput.value) || 10000;
+    const balParsed = (source === 'settings' && balanceInput) ? parseFloat(balanceInput.value) : settings.initialBalance;
+    const nextBalance = (!isNaN(balParsed) && balParsed > 0) ? balParsed : 10000;
 
     const lossEl = document.getElementById(source === 'analytics' ? 'analytics-daily-loss-limit' : 'setting-daily-loss-limit');
     const tradeEl = document.getElementById(source === 'analytics' ? 'analytics-daily-trade-limit' : 'setting-daily-trade-limit');
-    if (lossEl) settings.dailyLossLimit = parseNonNegLimit(lossEl.value, settings.dailyLossLimit ?? 100);
-    if (tradeEl) settings.dailyTradeLimit = Math.floor(parseNonNegLimit(tradeEl.value, settings.dailyTradeLimit ?? 3));
+    const nextLoss = lossEl ? parseNonNegLimit(lossEl.value, settings.dailyLossLimit ?? 100) : parseNonNegLimit(settings.dailyLossLimit, 100);
+    const nextTrade = tradeEl ? Math.floor(parseNonNegLimit(tradeEl.value, settings.dailyTradeLimit ?? 3)) : Math.floor(parseNonNegLimit(settings.dailyTradeLimit, 3));
+
+    const candidate = {
+      initialBalance: nextBalance,
+      dailyLossLimit: nextLoss,
+      dailyTradeLimit: nextTrade,
+    };
+    const changed = settingsValuesDiffer(settings, candidate);
+
+    if (opts.onlyIfChanged && !changed) return;
+    if (!changed && (Date.now() - lastSettingsSaveAt < 350) && (Number(settings.updatedAt) || 0) > 0) {
+      return;
+    }
+
+    lastSettingsSaveAt = Date.now();
+    settings.initialBalance = nextBalance;
+    settings.dailyLossLimit = nextLoss;
+    settings.dailyTradeLimit = nextTrade;
+    settings.updatedAt = Date.now();
 
     syncLimitInputs();
     localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
-    GoogleDriveSync.showToast('Settings & daily limits saved', 'success');
     renderKPIs();
     renderCharts();
+    updateModalDailyLimitWarning();
+
+    const hasCloud = typeof GoogleDriveSync !== 'undefined' && (GoogleDriveSync.hasWebhook() || GoogleDriveSync.isAuthenticated());
+    if (hasCloud && GoogleDriveSync.syncSettings) {
+      GoogleDriveSync.syncSettings(Object.assign({}, settings), { notify: opts.notify !== false });
+    } else if (opts.notify !== false && typeof GoogleDriveSync !== 'undefined') {
+      GoogleDriveSync.showToast('Settings & daily limits saved locally', 'success');
+    }
   }
 
   async function loadTrades() {
@@ -2545,48 +2704,26 @@ const TradeApp = (function() {
 
   // Bind all UI events
   function bindEvents() {
-    // Nav tabs (Desktop and Mobile)
-    const tabs = [
-      { btn: 'nav-btn-trades', mobBtn: 'mobile-nav-btn-trades', view: 'view-trades' },
-      { btn: 'nav-btn-analytics', mobBtn: 'mobile-nav-btn-analytics', view: 'view-analytics' },
-      { btn: 'nav-btn-roadmap', mobBtn: 'mobile-nav-btn-roadmap', view: 'view-roadmap' },
-      { btn: 'nav-btn-gdrive', mobBtn: 'mobile-nav-btn-gdrive', view: 'view-gdrive' },
-    ];
-
-    function switchTab(viewId) {
-      sessionStorage.setItem('tj_active_view', viewId);
-      tabs.forEach(t => {
-        const desktopBtn = document.getElementById(t.btn);
-        const mobBtn = document.getElementById(t.mobBtn);
-        const viewEl = document.getElementById(t.view);
-
-        if (t.view === viewId) {
-          if (desktopBtn) {
-            desktopBtn.className = 'nav-tab active px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-all text-white bg-indigo-600 shadow-sm';
-          }
-          if (mobBtn) {
-            mobBtn.className = 'mobile-nav-item active flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-bold text-indigo-600 transition';
-          }
-          if (viewEl) viewEl.classList.remove('hidden');
-          if (t.view === 'view-analytics') renderCharts();
-        } else {
-          if (desktopBtn) {
-            desktopBtn.className = 'nav-tab px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-all text-slate-400 hover:text-white hover:bg-slate-800';
-          }
-          if (mobBtn) {
-            mobBtn.className = 'mobile-nav-item flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium text-slate-400 hover:text-indigo-600 transition';
-          }
-          if (viewEl) viewEl.classList.add('hidden');
-        }
-      });
-    }
-
-    tabs.forEach(tab => {
+    // Nav tabs (Desktop and Mobile) using module-level NAV_TABS & switchTab
+    NAV_TABS.forEach(tab => {
       const desktopBtn = document.getElementById(tab.btn);
       if (desktopBtn) desktopBtn.addEventListener('click', () => switchTab(tab.view));
 
       const mobBtn = document.getElementById(tab.mobBtn);
       if (mobBtn) mobBtn.addEventListener('click', () => switchTab(tab.view));
+    });
+
+    // Background sync when returning to this browser tab (keeps Daily Limits synced across browsers)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return;
+      const modalTradeOpen = !document.getElementById('modal-trade')?.classList.contains('hidden');
+      const modalSettingsOpen = !document.getElementById('modal-settings')?.classList.contains('hidden');
+      if (modalTradeOpen || modalSettingsOpen) return;
+      const activeTag = document.activeElement?.tagName;
+      if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
+      if (typeof GoogleDriveSync !== 'undefined' && GoogleDriveSync.syncIfStale) {
+        GoogleDriveSync.syncIfStale(10000);
+      }
     });
 
     const mobLogBtn = document.getElementById('mobile-btn-log-trade');
@@ -2697,8 +2834,13 @@ const TradeApp = (function() {
     document.getElementById('btn-close-settings-modal').addEventListener('click', () => {
       settingsModal.classList.add('hidden');
       settingsModal.classList.remove('flex');
-      saveSettings('settings');
+      saveSettings('settings', { onlyIfChanged: true });
     });
+
+    const btnLimitsUpdateScript = document.getElementById('btn-limits-update-script');
+    if (btnLimitsUpdateScript) {
+      btnLimitsUpdateScript.addEventListener('click', () => GoogleDriveSync.openAppsScriptModal());
+    }
 
     const btnSaveDailyLimits = document.getElementById('btn-save-daily-limits');
     if (btnSaveDailyLimits) {
@@ -2712,11 +2854,11 @@ const TradeApp = (function() {
       ids.forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
-        el.addEventListener('change', () => saveSettings(source));
+        el.addEventListener('change', () => saveSettings(source, { onlyIfChanged: true }));
         el.addEventListener('keydown', e => {
           if (e.key === 'Enter') {
             e.preventDefault();
-            saveSettings(source);
+            saveSettings(source, { onlyIfChanged: true });
           }
         });
       });
@@ -2982,7 +3124,10 @@ const TradeApp = (function() {
     },
     normalizeTradeCharts,
     syncLegacyChartFields,
-    calculateStats
+    calculateStats,
+    getSettings: () => Object.assign({}, settings),
+    applyRemoteSettings,
+    updateLimitsSyncBadge
   };
 })();
 

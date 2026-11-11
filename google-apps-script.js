@@ -39,11 +39,71 @@ function authorizePermissions() {
   Logger.log("SUCCESS: Both Google Sheets and Google Drive permissions are authorized!");
 }
 
+var SETTINGS_PROP_KEY = 'TJ_JOURNAL_SETTINGS_V1';
+
+function normalizeSettings_(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  var loss = parseFloat(raw.dailyLossLimit);
+  var trade = parseInt(raw.dailyTradeLimit, 10);
+  var bal = parseFloat(raw.initialBalance);
+  var risk = parseFloat(raw.maxRiskPct);
+  var updatedAt = Number(raw.updatedAt) || 0;
+  return {
+    initialBalance: (!isNaN(bal) && bal > 0) ? bal : 10000,
+    maxRiskPct: (!isNaN(risk) && risk >= 0) ? risk : 1.0,
+    dailyLossLimit: (!isNaN(loss) && loss >= 0) ? loss : 100,
+    dailyTradeLimit: (!isNaN(trade) && trade >= 0) ? trade : 3,
+    updatedAt: updatedAt
+  };
+}
+
+function readStoredSettings_() {
+  try {
+    var rawStr = PropertiesService.getScriptProperties().getProperty(SETTINGS_PROP_KEY);
+    if (!rawStr) return null;
+    return normalizeSettings_(JSON.parse(rawStr));
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveStoredSettings_(incomingRaw) {
+  var incoming = normalizeSettings_(incomingRaw);
+  if (!incoming) return readStoredSettings_();
+  var existing = readStoredSettings_();
+  if (existing && (existing.updatedAt || 0) > (incoming.updatedAt || 0)) {
+    return existing;
+  }
+  if (!existing || incoming.updatedAt > 0 || (existing.updatedAt || 0) === 0) {
+    if (!incoming.updatedAt) incoming.updatedAt = Date.now();
+    PropertiesService.getScriptProperties().setProperty(SETTINGS_PROP_KEY, JSON.stringify(incoming));
+    return incoming;
+  }
+  return existing;
+}
+
 function doPost(e) {
   try {
     var rawData = e.postData.contents;
     var data = JSON.parse(rawData);
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+
+    var savedSettings = null;
+    if (data.settings) {
+      savedSettings = saveStoredSettings_(data.settings);
+    }
+
+    if (data.action === 'saveSettings') {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        action: "saveSettings",
+        settings: savedSettings || readStoredSettings_(),
+        settingsSupported: true,
+        message: "Saved journal settings & daily limits!"
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheets()[0];
 
     // If sheet is empty, setup headers
     if (sheet.getLastRow() === 0) {
@@ -205,6 +265,8 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
       tradesCount: trades.length,
+      settings: savedSettings || readStoredSettings_(),
+      settingsSupported: true,
       message: "Synced " + trades.length + " trades to Google Drive Spreadsheet!"
     })).setMimeType(ContentService.MimeType.JSON);
 
@@ -351,11 +413,18 @@ function extractChartsFromCell_(richText, formula, cellText) {
 
 function doGet(e) {
   try {
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheets()[0];
+    var storedSettings = readStoredSettings_();
     var lastRow = sheet.getLastRow();
     if (lastRow <= 1) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "success", trades: [] }))
-        .setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        trades: [],
+        settings: storedSettings,
+        settingsSupported: true,
+        syncedAt: new Date().toISOString()
+      })).setMimeType(ContentService.MimeType.JSON);
     }
 
     var lastCol = Math.max(sheet.getLastColumn(), 15);
@@ -430,6 +499,8 @@ function doGet(e) {
       status: "success",
       trades: trades,
       count: trades.length,
+      settings: storedSettings,
+      settingsSupported: true,
       syncedAt: new Date().toISOString()
     })).setMimeType(ContentService.MimeType.JSON);
 

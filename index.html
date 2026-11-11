@@ -435,10 +435,16 @@
       <div class="bg-cardBg border border-borderSubtle rounded-2xl p-5 shadow-sm space-y-5">
         <div class="flex flex-col lg:flex-row lg:items-center justify-between pb-4 border-b border-borderSubtle gap-4">
           <div>
-            <h2 class="text-base font-bold text-white flex items-center space-x-2">
-              <i data-lucide="shield-check" class="w-5 h-5 text-indigo-400"></i>
-              <span>Daily Loss Limit &amp; Daily Trade Limit</span>
-            </h2>
+            <div class="flex flex-wrap items-center gap-2">
+              <h2 class="text-base font-bold text-white flex items-center space-x-2">
+                <i data-lucide="shield-check" class="w-5 h-5 text-indigo-400"></i>
+                <span>Daily Loss Limit &amp; Daily Trade Limit</span>
+              </h2>
+              <span id="daily-limits-sync-status" class="hidden inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-500"></span>
+              <button type="button" id="btn-limits-update-script" class="hidden px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-500 hover:bg-amber-500/25 border border-amber-500/30 transition">
+                ⚠️ Update Sheet Script for Browser Sync
+              </button>
+            </div>
             <p class="text-xs text-slate-400 mt-0.5">Track daily capital protection rules and prevent overtrading across every session</p>
           </div>
 
@@ -1158,6 +1164,7 @@
               <p class="text-[10px] text-slate-500 mt-1">Max executed trades per day</p>
             </div>
           </div>
+          <p class="text-[10px] text-slate-500">Syncs across browsers automatically when connected to Google Sheet.</p>
         </div>
 
         <!-- Master Passcode Security -->

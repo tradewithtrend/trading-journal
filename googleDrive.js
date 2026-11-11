@@ -11,6 +11,7 @@ const GoogleDriveSync = (function() {
   const STORAGE_KEY_FILE_ID = 'tj_gdrive_file_id';
   const STORAGE_KEY_LAST_SYNC = 'tj_gdrive_last_sync';
   const STORAGE_KEY_WEBHOOK = 'tj_sheet_webhook_url';
+  const STORAGE_KEY_SETTINGS_SYNC_SUPPORTED = 'tj_sheet_settings_supported';
 
   const DRIVE_FILE_NAME = 'Trading_Journal_100_Trades.json';
   const DRIVE_CSV_NAME = 'Trading_Journal_100_Trades.csv';
@@ -25,6 +26,26 @@ const GoogleDriveSync = (function() {
   let clientId = localStorage.getItem(STORAGE_KEY_CLIENT_ID) || '';
   let fileId = localStorage.getItem(STORAGE_KEY_FILE_ID) || null;
   let webhookUrl = localStorage.getItem(STORAGE_KEY_WEBHOOK) || DEFAULT_WEBHOOK_URL;
+  let smartSyncPromise = null;
+  let lastSmartSyncAt = 0;
+  let lastPushAt = 0;
+  const savedSupportFlag = localStorage.getItem(STORAGE_KEY_SETTINGS_SYNC_SUPPORTED);
+  let settingsSyncSupported = savedSupportFlag === 'true' ? true : (savedSupportFlag === 'false' ? false : null);
+
+  function getLocalSettingsSnapshot() {
+    if (typeof TradeApp !== 'undefined' && TradeApp.getSettings) {
+      return TradeApp.getSettings();
+    }
+    return null;
+  }
+
+  function setSettingsSyncSupported(supported) {
+    settingsSyncSupported = Boolean(supported);
+    localStorage.setItem(STORAGE_KEY_SETTINGS_SYNC_SUPPORTED, settingsSyncSupported ? 'true' : 'false');
+    if (typeof TradeApp !== 'undefined' && TradeApp.updateLimitsSyncBadge) {
+      TradeApp.updateLimitsSyncBadge();
+    }
+  }
 
   // Initialize GIS Token Client
   function initClient() {
@@ -104,21 +125,24 @@ const GoogleDriveSync = (function() {
     tokenClient.requestAccessToken({ prompt: isAuthenticated() ? '' : 'consent' });
   }
 
-  // Upload or update trades data into Google Drive
+  // Upload or update trades & settings data into Google Drive / Sheet
   async function syncToDrive(customData = null) {
     const trades = customData || TradeApp.getTrades();
+    const localSettings = getLocalSettingsSnapshot();
     const payload = {
       meta: {
         app: '100 Trades Journal — Phase 1',
-        version: '1.0',
+        version: '1.1',
         exportedAt: new Date().toISOString(),
         totalTrades: trades.length,
         milestoneProgress: `${trades.length}/100`,
       },
       trades: trades,
+      settings: localSettings,
       stats: TradeApp.calculateStats(trades)
     };
 
+    lastPushAt = Date.now();
     let syncedAnywhere = false;
 
     // 1. If Webhook URL is set, send to Google Sheet webhook
@@ -148,6 +172,96 @@ const GoogleDriveSync = (function() {
       showToast('No cloud sync configured. Downloaded local backup copy.', 'info');
       exportJson(trades);
     }
+  }
+
+  // Push updated journal settings (Daily Loss Limit, Daily Trade Limit, Balance) to connected cloud sync
+  async function syncSettings(customSettings = null, options = { notify: true }) {
+    const settingsObj = customSettings || getLocalSettingsSnapshot();
+    if (!settingsObj) return { success: false, reason: 'no_settings' };
+
+    lastPushAt = Date.now();
+    const notify = options && options.notify !== false;
+    let synced = false;
+
+    if (webhookUrl) {
+      await syncToGoogleSheetWebhook({
+        action: 'saveSettings',
+        meta: {
+          app: '100 Trades Journal — Phase 1',
+          version: '1.1',
+          exportedAt: new Date().toISOString()
+        },
+        settings: settingsObj
+      }, { silentToast: true });
+      synced = true;
+
+      if (notify) {
+        if (settingsSyncSupported === false) {
+          showToast('Saved locally! Click "Update Sheet Script" in Analytics so limits sync to other browsers.', 'info');
+        } else {
+          showToast('Daily limits & settings synced to Google Sheet!', 'success');
+        }
+      }
+    }
+
+    if (isAuthenticated()) {
+      try {
+        const trades = TradeApp.getTrades();
+        await saveJsonFileToDrive({
+          meta: {
+            app: '100 Trades Journal — Phase 1',
+            version: '1.1',
+            exportedAt: new Date().toISOString(),
+            totalTrades: trades.length
+          },
+          trades,
+          settings: settingsObj,
+          stats: TradeApp.calculateStats(trades)
+        });
+        synced = true;
+        if (notify && !webhookUrl) {
+          showToast('Daily limits & settings synced to Google Drive!', 'success');
+        }
+      } catch (err) {
+        console.error('Error syncing settings to Google Drive:', err);
+      }
+    }
+
+    if (typeof TradeApp !== 'undefined' && TradeApp.updateLimitsSyncBadge) {
+      TradeApp.updateLimitsSyncBadge();
+    }
+    return { success: synced };
+  }
+
+  /** Reconcile remote settings against local settings by updatedAt timestamp. */
+  function reconcileRemoteSettings(data, { pushIfLocalNewer = true } = {}) {
+    const remoteSupports = Boolean(data && (data.settingsSupported || data.settings));
+    setSettingsSyncSupported(remoteSupports);
+
+    const remoteSettings = (data && data.settings) ? data.settings : null;
+    const localSettings = getLocalSettingsSnapshot();
+    const remoteUpdated = Number(remoteSettings && remoteSettings.updatedAt) || 0;
+    const localUpdated = Number(localSettings && localSettings.updatedAt) || 0;
+
+    if (remoteSettings && remoteUpdated > localUpdated) {
+      if (typeof TradeApp !== 'undefined' && TradeApp.applyRemoteSettings) {
+        TradeApp.applyRemoteSettings(remoteSettings);
+      }
+      return { action: 'pulled', remoteSupports };
+    }
+
+    if (remoteSupports && localSettings && localUpdated > remoteUpdated) {
+      if (pushIfLocalNewer && webhookUrl) {
+        syncToGoogleSheetWebhook({
+          action: 'saveSettings',
+          meta: { app: '100 Trades Journal — Phase 1', version: '1.1', exportedAt: new Date().toISOString() },
+          settings: localSettings
+        }, { silentToast: true });
+      }
+      return { action: 'pushed', remoteSupports, needsPush: !pushIfLocalNewer };
+    }
+
+    return { action: 'none', remoteSupports };
   }
 
   // Save/Update file via Google Drive API v3
@@ -339,137 +453,167 @@ const GoogleDriveSync = (function() {
     return { charts: merged, hasUnsyncedLocal };
   }
 
-  // Smart Two-Way Synchronizer (Pulls remote trades, merges, and updates UI)
+  // Smart Two-Way Synchronizer (Pulls remote trades & settings, merges, and updates UI)
   async function smartSync(options = { notify: true, silentIfEmpty: false }) {
-    if (webhookUrl) {
-      updateStatusUI('syncing', 'Syncing Sheet...');
-      try {
-        const res = await fetch(webhookUrl, { cache: 'no-store' });
-        const text = await res.text();
-        let data = null;
+    if (smartSyncPromise) {
+      return smartSyncPromise;
+    }
+
+    smartSyncPromise = (async () => {
+      if (webhookUrl) {
+        updateStatusUI('syncing', 'Syncing Sheet...');
         try {
-          data = JSON.parse(text);
-        } catch (e) {
-          console.error('Non-JSON response from Google Apps Script:', text);
-          throw new Error('Google Apps Script did not return JSON. Please verify web app access is set to "Anyone".');
-        }
-
-        if (data && data.status === 'success' && Array.isArray(data.trades)) {
-          const remoteTrades = data.trades;
-          const localTrades = TradeApp.getTrades() || [];
-
-          const compareNewestFirst = (a, b) => {
-            const numDiff = (parseInt(b.tradeNum, 10) || 0) - (parseInt(a.tradeNum, 10) || 0);
-            if (numDiff !== 0) return numDiff;
-            return new Date(b.date || 0) - new Date(a.date || 0);
-          };
-          const isOutOfOrder = list => list.some((t, i) => i > 0 && compareNewestFirst(list[i - 1], t) > 0);
-          const syncTradeFields = (typeof TradeApp !== 'undefined' && TradeApp.syncLegacyChartFields)
-            ? TradeApp.syncLegacyChartFields
-            : (t => t);
-
-          let hasUnsyncedCharts = false;
-
-          // Hydrate & normalize charts for all remote trades from local state or IndexedDB
-          for (const remoteTrade of remoteTrades) {
-            const num = parseInt(remoteTrade.tradeNum, 10);
-            const localTrade = localTrades.find(t => parseInt(t.tradeNum, 10) === num);
-            const dbCharts = (typeof TradeStorage !== 'undefined')
-              ? (TradeStorage.getTradeCharts
-                  ? await TradeStorage.getTradeCharts(localTrade ? localTrade.id : remoteTrade.id, num)
-                  : await (async () => {
-                      const img = await TradeStorage.getScreenshot(localTrade ? localTrade.id : remoteTrade.id, num);
-                      return img ? [{ id: 'ch_0', label: 'Entry / Setup', screenshot: img, chartUrl: '' }] : null;
-                    })())
-              : null;
-
-            const mergedChartsRes = mergeTradeCharts(remoteTrade, localTrade, dbCharts);
-            if (mergedChartsRes.hasUnsyncedLocal) hasUnsyncedCharts = true;
-            remoteTrade.charts = mergedChartsRes.charts;
-            syncTradeFields(remoteTrade);
+          const res = await fetch(webhookUrl, { cache: 'no-store' });
+          const text = await res.text();
+          let data = null;
+          try {
+            data = JSON.parse(text);
+          } catch (e) {
+            console.error('Non-JSON response from Google Apps Script:', text);
+            throw new Error('Google Apps Script did not return JSON. Please verify web app access is set to "Anyone".');
           }
 
-          if (remoteTrades.length === 0 && localTrades.length === 0) {
-            if (!options.silentIfEmpty && options.notify) {
-              showToast('Google Sheet is connected, but has no trades yet.', 'info');
-            }
-          } else if (remoteTrades.length > 0 && localTrades.length === 0) {
-            // Restore all remote trades to local (newest first) and flip sheet if ascending
-            const sortedRemote = [...remoteTrades].sort(compareNewestFirst);
-            TradeApp.setTrades(sortedRemote);
-            if (remoteTrades.length > 1 && isOutOfOrder(remoteTrades)) {
-              syncToGoogleSheetWebhook({ trades: sortedRemote });
-            }
-            if (options.notify) {
-              showToast(`Restored ${sortedRemote.length} trade(s) from your Google Sheet!`, 'success');
-            }
-          } else if (remoteTrades.length === 0 && localTrades.length > 0) {
-            // Push local trades to remote sheet
-            await syncToGoogleSheetWebhook({ trades: localTrades });
-            if (options.notify) {
-              showToast(`Backed up ${localTrades.length} trade(s) to your Google Sheet!`, 'success');
-            }
-          } else {
-            // Merge both sets by tradeNum PRESERVING multi-chart screenshots & Drive links
-            const mergedMap = new Map();
-            localTrades.forEach(t => mergedMap.set(parseInt(t.tradeNum, 10), t));
+          if (data && data.status === 'success' && Array.isArray(data.trades)) {
+            const remoteTrades = data.trades;
+            const localTrades = TradeApp.getTrades() || [];
+
+            const compareNewestFirst = (a, b) => {
+              const numDiff = (parseInt(b.tradeNum, 10) || 0) - (parseInt(a.tradeNum, 10) || 0);
+              if (numDiff !== 0) return numDiff;
+              return new Date(b.date || 0) - new Date(a.date || 0);
+            };
+            const isOutOfOrder = list => list.some((t, i) => i > 0 && compareNewestFirst(list[i - 1], t) > 0);
+            const syncTradeFields = (typeof TradeApp !== 'undefined' && TradeApp.syncLegacyChartFields)
+              ? TradeApp.syncLegacyChartFields
+              : (t => t);
+
+            let hasUnsyncedCharts = false;
+
+            // Hydrate & normalize charts for all remote trades from local state or IndexedDB
             for (const remoteTrade of remoteTrades) {
               const num = parseInt(remoteTrade.tradeNum, 10);
-              const localTrade = mergedMap.get(num);
-              if (localTrade) {
-                remoteTrade.id = localTrade.id || remoteTrade.id;
+              const localTrade = localTrades.find(t => parseInt(t.tradeNum, 10) === num);
+              const dbCharts = (typeof TradeStorage !== 'undefined')
+                ? (TradeStorage.getTradeCharts
+                    ? await TradeStorage.getTradeCharts(localTrade ? localTrade.id : remoteTrade.id, num)
+                    : await (async () => {
+                        const img = await TradeStorage.getScreenshot(localTrade ? localTrade.id : remoteTrade.id, num);
+                        return img ? [{ id: 'ch_0', label: 'Entry / Setup', screenshot: img, chartUrl: '' }] : null;
+                      })())
+                : null;
+
+              const mergedChartsRes = mergeTradeCharts(remoteTrade, localTrade, dbCharts);
+              if (mergedChartsRes.hasUnsyncedLocal) hasUnsyncedCharts = true;
+              remoteTrade.charts = mergedChartsRes.charts;
+              syncTradeFields(remoteTrade);
+            }
+
+            if (remoteTrades.length === 0 && localTrades.length === 0) {
+              reconcileRemoteSettings(data, { pushIfLocalNewer: true });
+              if (!options.silentIfEmpty && options.notify) {
+                showToast('Google Sheet is connected, but has no trades yet.', 'info');
               }
-              mergedMap.set(num, syncTradeFields(remoteTrade));
-            }
-            const mergedList = Array.from(mergedMap.values()).sort(compareNewestFirst);
+            } else if (remoteTrades.length > 0 && localTrades.length === 0) {
+              const settingsSyncRes = reconcileRemoteSettings(data, { pushIfLocalNewer: false });
+              const sortedRemote = [...remoteTrades].sort(compareNewestFirst);
+              TradeApp.setTrades(sortedRemote);
+              if (remoteTrades.length > 1 && isOutOfOrder(remoteTrades)) {
+                syncToGoogleSheetWebhook({ trades: sortedRemote, settings: getLocalSettingsSnapshot() });
+              } else if (settingsSyncRes.needsPush) {
+                syncToGoogleSheetWebhook({ action: 'saveSettings', settings: getLocalSettingsSnapshot() }, { silentToast: true });
+              }
+              if (options.notify) {
+                showToast(`Restored ${sortedRemote.length} trade(s) from your Google Sheet!`, 'success');
+              }
+            } else if (remoteTrades.length === 0 && localTrades.length > 0) {
+              reconcileRemoteSettings(data, { pushIfLocalNewer: false });
+              await syncToGoogleSheetWebhook({ trades: localTrades, settings: getLocalSettingsSnapshot() });
+              if (options.notify) {
+                showToast(`Backed up ${localTrades.length} trade(s) to your Google Sheet!`, 'success');
+              }
+            } else {
+              const settingsSyncRes = reconcileRemoteSettings(data, { pushIfLocalNewer: false });
 
-            TradeApp.setTrades(mergedList);
-            if (options.notify) {
-              showToast(`Synchronized ${mergedList.length} trade(s) with Google Sheet!`, 'success');
+              // Merge both sets by tradeNum PRESERVING multi-chart screenshots & Drive links
+              const mergedMap = new Map();
+              localTrades.forEach(t => mergedMap.set(parseInt(t.tradeNum, 10), t));
+              for (const remoteTrade of remoteTrades) {
+                const num = parseInt(remoteTrade.tradeNum, 10);
+                const localTrade = mergedMap.get(num);
+                if (localTrade) {
+                  remoteTrade.id = localTrade.id || remoteTrade.id;
+                }
+                mergedMap.set(num, syncTradeFields(remoteTrade));
+              }
+              const mergedList = Array.from(mergedMap.values()).sort(compareNewestFirst);
+
+              TradeApp.setTrades(mergedList);
+              if (options.notify) {
+                showToast(`Synchronized ${mergedList.length} trade(s) with Google Sheet!`, 'success');
+              }
+
+              const needsTradePush = mergedList.length > remoteTrades.length || hasUnsyncedCharts || (remoteTrades.length > 1 && isOutOfOrder(remoteTrades));
+              if (needsTradePush) {
+                syncToGoogleSheetWebhook({ trades: mergedList, settings: getLocalSettingsSnapshot() });
+              } else if (settingsSyncRes.needsPush) {
+                syncToGoogleSheetWebhook({ action: 'saveSettings', settings: getLocalSettingsSnapshot() }, { silentToast: true });
+              }
             }
 
-            if (mergedList.length > remoteTrades.length || hasUnsyncedCharts || (remoteTrades.length > 1 && isOutOfOrder(remoteTrades))) {
-              syncToGoogleSheetWebhook({ trades: mergedList });
-            }
+            const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            localStorage.setItem(STORAGE_KEY_LAST_SYNC, nowStr);
+            const lastSyncEl = document.getElementById('gdrive-last-synced');
+            if (lastSyncEl) lastSyncEl.textContent = nowStr;
+
+            updateStatusUI('connected', 'Sheet: Synced');
+            return { success: true, count: TradeApp.getTrades().length };
+          } else if (data && data.status === 'online') {
+            // Old Google Apps Script version deployed
+            setSettingsSyncSupported(false);
+            openAppsScriptModal();
+            showToast('Google Sheet Webhook is active! Deploy "New version" in Apps Script to enable reading rows.', 'info');
+            updateStatusUI('connected', 'Sheet: Active');
+            return { success: false, reason: 'script_v1' };
+          } else {
+            showToast('Google Sheet: ' + (data?.message || 'Empty response'), 'info');
+            updateStatusUI('connected', 'Sheet: Synced');
+            return { success: false, reason: data?.message };
           }
-
-          const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          localStorage.setItem(STORAGE_KEY_LAST_SYNC, nowStr);
-          const lastSyncEl = document.getElementById('gdrive-last-synced');
-          if (lastSyncEl) lastSyncEl.textContent = nowStr;
-
-          updateStatusUI('connected', 'Sheet: Synced');
-          return { success: true, count: TradeApp.getTrades().length };
-        } else if (data && data.status === 'online') {
-          // Old Google Apps Script version deployed
-          openAppsScriptModal();
-          showToast('Google Sheet Webhook is active! Deploy "New version" in Apps Script to enable reading rows.', 'info');
-          updateStatusUI('connected', 'Sheet: Active');
-          return { success: false, reason: 'script_v1' };
-        } else {
-          showToast('Google Sheet: ' + (data?.message || 'Empty response'), 'info');
-          updateStatusUI('connected', 'Sheet: Synced');
-          return { success: false, reason: data?.message };
+        } catch (err) {
+          console.error('Smart sync error:', err);
+          if (!options.silentIfEmpty && options.notify) {
+            showToast('Failed to sync from Google Sheet: ' + err.message, 'error');
+          }
+          updateStatusUI('error', 'Sync Error');
+          return { success: false, error: err };
         }
-      } catch (err) {
-        console.error('Smart sync error:', err);
-        if (!options.silentIfEmpty && options.notify) {
-          showToast('Failed to sync from Google Sheet: ' + err.message, 'error');
-        }
-        updateStatusUI('error', 'Sync Error');
-        return { success: false, error: err };
       }
-    }
 
-    // Direct Google Drive OAuth fallback
-    if (isAuthenticated()) {
-      return pullFromDrive();
-    } else {
-      if (options.notify && !options.silentIfEmpty) {
-        showToast('Google Drive/Sheet not configured yet. Open Google Drive Sync settings.', 'info');
+      // Direct Google Drive OAuth fallback
+      if (isAuthenticated()) {
+        return pullFromDrive();
+      } else {
+        if (options.notify && !options.silentIfEmpty) {
+          showToast('Google Drive/Sheet not configured yet. Open Google Drive Sync settings.', 'info');
+        }
+        return { success: false, reason: 'not_connected' };
       }
-      return { success: false, reason: 'not_connected' };
+    })();
+
+    try {
+      return await smartSyncPromise;
+    } finally {
+      smartSyncPromise = null;
+      lastSmartSyncAt = Date.now();
     }
+  }
+
+  function syncIfStale(minIntervalMs = 10000) {
+    if (!hasWebhook() && !isAuthenticated()) return;
+    if (smartSyncPromise) return;
+    const now = Date.now();
+    if (now - lastSmartSyncAt < minIntervalMs || now - lastPushAt < 4000) return;
+    smartSync({ notify: false, silentIfEmpty: true });
   }
 
   // Pull / download data from Google Drive (Supports both Google Sheet Webhook and Drive OAuth)
@@ -479,12 +623,20 @@ const GoogleDriveSync = (function() {
 
   /** Prepare a lightweight copy of webhook payload: omit base64 for charts already uploaded to Drive. */
   function buildWebhookPayload(payload) {
-    if (!payload || !Array.isArray(payload.trades)) return payload;
+    if (!payload) return payload;
+    const cleanPayload = Object.assign({}, payload);
+
+    // Avoid letting an untouched default browser (updatedAt: 0) overwrite customized limits on server
+    if (cleanPayload.settings && !(Number(cleanPayload.settings.updatedAt) > 0) && cleanPayload.action !== 'saveSettings') {
+      delete cleanPayload.settings;
+    }
+
+    if (!Array.isArray(cleanPayload.trades)) return cleanPayload;
     const normalize = (typeof TradeApp !== 'undefined' && TradeApp.normalizeTradeCharts)
       ? TradeApp.normalizeTradeCharts
       : (t => (t && Array.isArray(t.charts) ? t.charts : []));
 
-    const lightTrades = payload.trades.map(t => {
+    const lightTrades = cleanPayload.trades.map(t => {
       const charts = normalize(t).map(c => ({
         id: c.id || '',
         label: c.label || '',
@@ -502,13 +654,15 @@ const GoogleDriveSync = (function() {
       });
     });
 
-    return Object.assign({}, payload, { trades: lightTrades });
+    cleanPayload.trades = lightTrades;
+    return cleanPayload;
   }
 
   // Google Sheets Webhook Sync (Alternate zero-OAuth solution)
-  async function syncToGoogleSheetWebhook(payload) {
+  async function syncToGoogleSheetWebhook(payload, opts = { silentToast: false }) {
     if (!webhookUrl) return;
 
+    lastPushAt = Date.now();
     updateStatusUI('syncing', 'Syncing Sheet...');
     try {
       const preparedPayload = buildWebhookPayload(payload);
@@ -531,7 +685,9 @@ const GoogleDriveSync = (function() {
       if (fileNameEl) fileNameEl.textContent = '100 Trades Journal (Google Sheet)';
 
       updateStatusUI('connected', 'Sheet: Synced');
-      showToast('Synced trades to Google Sheet in Drive!', 'success');
+      if (!opts || !opts.silentToast) {
+        showToast('Synced trades to Google Sheet in Drive!', 'success');
+      }
     } catch (err) {
       console.error('Google Sheet Webhook sync error:', err);
       updateStatusUI('error', 'Sheet Sync Error');
@@ -700,11 +856,13 @@ const GoogleDriveSync = (function() {
       if (data && data.status === 'success' && Array.isArray(data.trades)) {
         if (indicator) indicator.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
         if (statusText) statusText.textContent = `Connected! Found ${data.trades.length} trade(s) in your Google Sheet.`;
+        reconcileRemoteSettings(data, { pushIfLocalNewer: true });
         if (data.trades.length > 0) {
           TradeApp.setTrades(data.trades);
           showToast(`Loaded ${data.trades.length} trade(s) from Google Sheet!`, 'success');
         }
       } else if (data && data.status === 'online') {
+        setSettingsSyncSupported(false);
         if (indicator) indicator.className = 'w-2.5 h-2.5 rounded-full bg-amber-400';
         if (statusText) statusText.textContent = 'Webhook is online, but running script v1. Please deploy "New version" (Step 4 above).';
       } else {
@@ -721,7 +879,13 @@ const GoogleDriveSync = (function() {
   function exportJson(trades) {
     try {
       const data = trades || (typeof TradeApp !== 'undefined' ? TradeApp.getTrades() : []);
-      const jsonStr = JSON.stringify(data, null, 2);
+      const backupObj = {
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        settings: getLocalSettingsSnapshot(),
+        trades: data
+      };
+      const jsonStr = JSON.stringify(backupObj, null, 2);
       const blob = new Blob([jsonStr], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const dlAnchorElem = document.createElement('a');
@@ -746,6 +910,7 @@ const GoogleDriveSync = (function() {
       try {
         const parsed = JSON.parse(e.target.result);
         const importedTrades = Array.isArray(parsed) ? parsed : (parsed.trades || []);
+        const importedSettings = (!Array.isArray(parsed) && parsed && parsed.settings) ? parsed.settings : null;
         if (!Array.isArray(importedTrades) || importedTrades.length === 0) {
           showToast('No trades found in selected file.', 'error');
           return;
@@ -765,12 +930,16 @@ const GoogleDriveSync = (function() {
           }
         }
 
+        if (importedSettings && typeof TradeApp !== 'undefined' && TradeApp.applyRemoteSettings) {
+          TradeApp.applyRemoteSettings(importedSettings);
+        }
+
         TradeApp.setTrades(importedTrades);
         showToast(`Successfully imported ${importedTrades.length} trade(s) with charts!`, 'success');
 
         // Sync with Google Sheet if connected
         if (webhookUrl) {
-          syncToGoogleSheetWebhook({ trades: importedTrades });
+          syncToGoogleSheetWebhook({ trades: importedTrades, settings: getLocalSettingsSnapshot() });
         }
       } catch (err) {
         console.error('Import JSON error:', err);
@@ -914,11 +1083,14 @@ const GoogleDriveSync = (function() {
     },
     connect,
     syncToDrive,
+    syncSettings,
     pullFromDrive,
     smartSync,
+    syncIfStale,
     hasWebhook,
     getWebhookUrl,
     isAuthenticated,
+    isSettingsSyncSupported: () => settingsSyncSupported,
     openAppsScriptModal,
     closeAppsScriptModal,
     restoreTrade1Directly,
