@@ -12,6 +12,7 @@ const GoogleDriveSync = (function() {
   const STORAGE_KEY_LAST_SYNC = 'tj_gdrive_last_sync';
   const STORAGE_KEY_WEBHOOK = 'tj_sheet_webhook_url';
   const STORAGE_KEY_SETTINGS_SYNC_SUPPORTED = 'tj_sheet_settings_supported';
+  const STORAGE_KEY_REMOTE_SETTINGS_PRESENT = 'tj_sheet_settings_present';
 
   const DRIVE_FILE_NAME = 'Trading_Journal_100_Trades.json';
   const DRIVE_CSV_NAME = 'Trading_Journal_100_Trades.csv';
@@ -31,6 +32,7 @@ const GoogleDriveSync = (function() {
   let lastPushAt = 0;
   const savedSupportFlag = localStorage.getItem(STORAGE_KEY_SETTINGS_SYNC_SUPPORTED);
   let settingsSyncSupported = savedSupportFlag === 'true' ? true : (savedSupportFlag === 'false' ? false : null);
+  let remoteSettingsPresent = localStorage.getItem(STORAGE_KEY_REMOTE_SETTINGS_PRESENT) === 'true';
 
   function getLocalSettingsSnapshot() {
     if (typeof TradeApp !== 'undefined' && TradeApp.getSettings) {
@@ -39,12 +41,22 @@ const GoogleDriveSync = (function() {
     return null;
   }
 
-  function setSettingsSyncSupported(supported) {
-    settingsSyncSupported = Boolean(supported);
-    localStorage.setItem(STORAGE_KEY_SETTINGS_SYNC_SUPPORTED, settingsSyncSupported ? 'true' : 'false');
+  function refreshLimitsBadge() {
     if (typeof TradeApp !== 'undefined' && TradeApp.updateLimitsSyncBadge) {
       TradeApp.updateLimitsSyncBadge();
     }
+  }
+
+  function setRemoteSettingsPresent(present) {
+    remoteSettingsPresent = Boolean(present);
+    localStorage.setItem(STORAGE_KEY_REMOTE_SETTINGS_PRESENT, remoteSettingsPresent ? 'true' : 'false');
+    refreshLimitsBadge();
+  }
+
+  function setSettingsSyncSupported(supported) {
+    settingsSyncSupported = Boolean(supported);
+    localStorage.setItem(STORAGE_KEY_SETTINGS_SYNC_SUPPORTED, settingsSyncSupported ? 'true' : 'false');
+    refreshLimitsBadge();
   }
 
   // Initialize GIS Token Client
@@ -184,7 +196,7 @@ const GoogleDriveSync = (function() {
     let synced = false;
 
     if (webhookUrl) {
-      await syncToGoogleSheetWebhook({
+      const postRes = await syncToGoogleSheetWebhook({
         action: 'saveSettings',
         meta: {
           app: '100 Trades Journal — Phase 1',
@@ -193,13 +205,29 @@ const GoogleDriveSync = (function() {
         },
         settings: settingsObj
       }, { silentToast: true });
-      synced = true;
+      synced = Boolean(postRes && postRes.success);
+
+      if (synced && !postRes.verified && webhookUrl) {
+        // Fallback when redirect CORS response couldn't be read directly: verify via doGet
+        try {
+          const vRes = await fetch(webhookUrl, { cache: 'no-store' });
+          const vData = JSON.parse(await vRes.text());
+          if (vData && vData.status === 'success') {
+            setSettingsSyncSupported(Boolean(vData.settingsSupported || vData.settings));
+            setRemoteSettingsPresent(Boolean(vData.settings));
+          }
+        } catch (vErr) {}
+      }
 
       if (notify) {
         if (settingsSyncSupported === false) {
           showToast('Saved locally! Click "Update Sheet Script" in Analytics so limits sync to other browsers.', 'info');
-        } else {
+        } else if (postRes && postRes.verified && postRes.data && postRes.data.settings) {
+          showToast('Daily limits saved & verified on Google Sheet!', 'success');
+        } else if (synced) {
           showToast('Daily limits & settings synced to Google Sheet!', 'success');
+        } else {
+          showToast('Saved locally, but Google Sheet sync failed. Check Sheet Sync status.', 'error');
         }
       }
     }
@@ -227,9 +255,7 @@ const GoogleDriveSync = (function() {
       }
     }
 
-    if (typeof TradeApp !== 'undefined' && TradeApp.updateLimitsSyncBadge) {
-      TradeApp.updateLimitsSyncBadge();
-    }
+    refreshLimitsBadge();
     return { success: synced };
   }
 
@@ -237,8 +263,9 @@ const GoogleDriveSync = (function() {
   function reconcileRemoteSettings(data, { pushIfLocalNewer = true } = {}) {
     const remoteSupports = Boolean(data && (data.settingsSupported || data.settings));
     setSettingsSyncSupported(remoteSupports);
-
     const remoteSettings = (data && data.settings) ? data.settings : null;
+    setRemoteSettingsPresent(Boolean(remoteSettings));
+
     const localSettings = getLocalSettingsSnapshot();
     const remoteUpdated = Number(remoteSettings && remoteSettings.updatedAt) || 0;
     const localUpdated = Number(localSettings && localSettings.updatedAt) || 0;
@@ -518,9 +545,9 @@ const GoogleDriveSync = (function() {
               const sortedRemote = [...remoteTrades].sort(compareNewestFirst);
               TradeApp.setTrades(sortedRemote);
               if (remoteTrades.length > 1 && isOutOfOrder(remoteTrades)) {
-                syncToGoogleSheetWebhook({ trades: sortedRemote, settings: getLocalSettingsSnapshot() });
+                await syncToGoogleSheetWebhook({ trades: sortedRemote, settings: getLocalSettingsSnapshot() });
               } else if (settingsSyncRes.needsPush) {
-                syncToGoogleSheetWebhook({ action: 'saveSettings', settings: getLocalSettingsSnapshot() }, { silentToast: true });
+                await syncToGoogleSheetWebhook({ action: 'saveSettings', settings: getLocalSettingsSnapshot() }, { silentToast: true });
               }
               if (options.notify) {
                 showToast(`Restored ${sortedRemote.length} trade(s) from your Google Sheet!`, 'success');
@@ -554,9 +581,9 @@ const GoogleDriveSync = (function() {
 
               const needsTradePush = mergedList.length > remoteTrades.length || hasUnsyncedCharts || (remoteTrades.length > 1 && isOutOfOrder(remoteTrades));
               if (needsTradePush) {
-                syncToGoogleSheetWebhook({ trades: mergedList, settings: getLocalSettingsSnapshot() });
+                await syncToGoogleSheetWebhook({ trades: mergedList, settings: getLocalSettingsSnapshot() });
               } else if (settingsSyncRes.needsPush) {
-                syncToGoogleSheetWebhook({ action: 'saveSettings', settings: getLocalSettingsSnapshot() }, { silentToast: true });
+                await syncToGoogleSheetWebhook({ action: 'saveSettings', settings: getLocalSettingsSnapshot() }, { silentToast: true });
               }
             }
 
@@ -658,26 +685,65 @@ const GoogleDriveSync = (function() {
     return cleanPayload;
   }
 
-  // Google Sheets Webhook Sync (Alternate zero-OAuth solution)
+  // Google Sheets Webhook Sync (Readable simple CORS POST with no-cors fallback)
   async function syncToGoogleSheetWebhook(payload, opts = { silentToast: false }) {
-    if (!webhookUrl) return;
+    if (!webhookUrl) return { success: false, reason: 'no_webhook' };
 
     lastPushAt = Date.now();
     updateStatusUI('syncing', 'Syncing Sheet...');
+    const preparedPayload = buildWebhookPayload(payload);
+    const bodyStr = JSON.stringify(preparedPayload);
+    let verified = false;
+    let respData = null;
+
     try {
-      const preparedPayload = buildWebhookPayload(payload);
-      await fetch(webhookUrl, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(preparedPayload),
-      });
+      try {
+        const res = await fetch(webhookUrl, {
+          method: 'POST',
+          redirect: 'follow',
+          headers: {
+            'Content-Type': 'text/plain;charset=utf-8',
+          },
+          body: bodyStr,
+        });
+        const text = await res.text();
+        try {
+          respData = JSON.parse(text);
+        } catch (parseErr) {
+          respData = null;
+        }
+        if (respData && respData.status === 'error') {
+          throw new Error(respData.message || 'Apps Script error');
+        }
+        if (respData && respData.status === 'success') {
+          verified = true;
+          if ('settingsSupported' in respData) {
+            setSettingsSyncSupported(Boolean(respData.settingsSupported));
+          } else if (preparedPayload.action === 'saveSettings') {
+            setSettingsSyncSupported(false);
+          }
+          if (respData.settings) {
+            setRemoteSettingsPresent(true);
+          }
+        }
+      } catch (postErr) {
+        if (respData && respData.status === 'error') {
+          throw postErr;
+        }
+        // Fallback when browser blocks cross-origin redirect response read
+        await fetch(webhookUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {
+            'Content-Type': 'text/plain;charset=utf-8',
+          },
+          body: bodyStr,
+        });
+      }
 
       const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       localStorage.setItem(STORAGE_KEY_LAST_SYNC, nowStr);
-      
+
       const lastSyncEl = document.getElementById('gdrive-last-synced');
       if (lastSyncEl) lastSyncEl.textContent = nowStr;
 
@@ -688,9 +754,11 @@ const GoogleDriveSync = (function() {
       if (!opts || !opts.silentToast) {
         showToast('Synced trades to Google Sheet in Drive!', 'success');
       }
+      return { success: true, verified, data: respData };
     } catch (err) {
       console.error('Google Sheet Webhook sync error:', err);
       updateStatusUI('error', 'Sheet Sync Error');
+      return { success: false, error: err };
     }
   }
 
@@ -1091,6 +1159,7 @@ const GoogleDriveSync = (function() {
     getWebhookUrl,
     isAuthenticated,
     isSettingsSyncSupported: () => settingsSyncSupported,
+    hasRemoteSettings: () => remoteSettingsPresent,
     openAppsScriptModal,
     closeAppsScriptModal,
     restoreTrade1Directly,

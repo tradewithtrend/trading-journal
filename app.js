@@ -594,8 +594,16 @@ const TradeApp = (function() {
 
     if (updateBtn) updateBtn.classList.add('hidden');
     if (badgeEl) {
-      badgeEl.textContent = supported === true ? 'Synced Across Browsers' : 'Cloud Sync Ready';
-      badgeEl.className = 'inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-500';
+      const hasRemote = GoogleDriveSync.hasRemoteSettings ? GoogleDriveSync.hasRemoteSettings() : false;
+      if (supported === true) {
+        badgeEl.textContent = hasRemote ? 'Synced Across Browsers' : 'Ready — Click Save Limits';
+        badgeEl.className = hasRemote
+          ? 'inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-500'
+          : 'inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/15 text-sky-400';
+      } else {
+        badgeEl.textContent = 'Cloud Sync Ready';
+        badgeEl.className = 'inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-500';
+      }
     }
   }
 
@@ -2713,18 +2721,21 @@ const TradeApp = (function() {
       if (mobBtn) mobBtn.addEventListener('click', () => switchTab(tab.view));
     });
 
-    // Background sync when returning to this browser tab (keeps Daily Limits synced across browsers)
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState !== 'visible') return;
+    // Background sync when returning to this browser tab/window (keeps Daily Limits synced across browsers)
+    function triggerBackgroundSyncIfIdle() {
       const modalTradeOpen = !document.getElementById('modal-trade')?.classList.contains('hidden');
       const modalSettingsOpen = !document.getElementById('modal-settings')?.classList.contains('hidden');
       if (modalTradeOpen || modalSettingsOpen) return;
       const activeTag = document.activeElement?.tagName;
       if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
       if (typeof GoogleDriveSync !== 'undefined' && GoogleDriveSync.syncIfStale) {
-        GoogleDriveSync.syncIfStale(10000);
+        GoogleDriveSync.syncIfStale(5000);
       }
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') triggerBackgroundSyncIfIdle();
     });
+    window.addEventListener('focus', triggerBackgroundSyncIfIdle);
 
     const mobLogBtn = document.getElementById('mobile-btn-log-trade');
     if (mobLogBtn) mobLogBtn.addEventListener('click', () => openTradeModal());
