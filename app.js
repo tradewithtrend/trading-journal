@@ -54,78 +54,96 @@ const TradeStorage = (function() {
     return dbPromise;
   }
 
-  async function saveScreenshot(tradeId, screenshotBase64, tradeNum = null) {
-    if (!screenshotBase64) return;
+  async function saveTradeCharts(tradeId, chartsList, tradeNum = null) {
     try {
+      const cleanCharts = (Array.isArray(chartsList) ? chartsList : [])
+        .filter(c => c && (c.screenshot || c.chartUrl))
+        .map((c, idx) => ({
+          id: c.id || `ch_${idx}`,
+          label: c.label || `Chart ${idx + 1}`,
+          screenshot: (c.screenshot && typeof c.screenshot === 'string' && c.screenshot.startsWith('data:')) ? c.screenshot : '',
+          chartUrl: c.chartUrl || '',
+          addedAt: c.addedAt || ''
+        }));
+
+      const primaryImg = (cleanCharts.find(c => c.screenshot) || {}).screenshot || '';
+      if (!primaryImg && !cleanCharts.some(c => c.chartUrl)) {
+        return deleteScreenshot(tradeId, tradeNum);
+      }
+
       const db = await getDB();
       if (!db) return;
       const tx = db.transaction(STORE_SCREENSHOTS, 'readwrite');
       const store = tx.objectStore(STORE_SCREENSHOTS);
-
       const now = Date.now();
-      if (tradeId) {
-        store.put({
-          key: String(tradeId),
-          tradeId: String(tradeId),
-          tradeNum: tradeNum ? parseInt(tradeNum, 10) : null,
-          screenshot: screenshotBase64,
-          updatedAt: now
-        });
-      }
-      if (tradeNum) {
-        store.put({
-          key: `num_${tradeNum}`,
-          tradeId: tradeId ? String(tradeId) : '',
-          tradeNum: parseInt(tradeNum, 10),
-          screenshot: screenshotBase64,
-          updatedAt: now
-        });
-      }
+
+      const buildRecord = (key, tNum) => ({
+        key,
+        tradeId: tradeId ? String(tradeId) : '',
+        tradeNum: tNum ? parseInt(tNum, 10) : null,
+        screenshot: primaryImg,
+        charts: cleanCharts,
+        updatedAt: now
+      });
+
+      if (tradeId) store.put(buildRecord(String(tradeId), tradeNum));
+      if (tradeNum) store.put(buildRecord(`num_${tradeNum}`, tradeNum));
     } catch (err) {
-      console.warn('TradeStorage saveScreenshot error:', err);
+      console.warn('TradeStorage saveTradeCharts error:', err);
     }
   }
 
-  async function getScreenshot(tradeId, tradeNum = null) {
+  async function saveScreenshot(tradeId, screenshotBase64, tradeNum = null) {
+    if (!screenshotBase64) return;
+    return saveTradeCharts(tradeId, [{
+      id: 'ch_0',
+      label: 'Entry / Setup',
+      screenshot: screenshotBase64,
+      chartUrl: ''
+    }], tradeNum);
+  }
+
+  async function getTradeCharts(tradeId, tradeNum = null) {
     try {
       const db = await getDB();
       if (!db) return null;
 
-      return new Promise((resolve) => {
+      const extractCharts = (rec) => {
+        if (!rec) return null;
+        if (Array.isArray(rec.charts) && rec.charts.length > 0) return rec.charts;
+        if (rec.screenshot) {
+          return [{ id: 'ch_0', label: 'Entry / Setup', screenshot: rec.screenshot, chartUrl: rec.chartUrl || '' }];
+        }
+        return null;
+      };
+
+      const readKey = (key) => new Promise((resolve) => {
         const tx = db.transaction(STORE_SCREENSHOTS, 'readonly');
         const store = tx.objectStore(STORE_SCREENSHOTS);
-
-        if (tradeId) {
-          const req1 = store.get(String(tradeId));
-          req1.onsuccess = function() {
-            if (req1.result && req1.result.screenshot) {
-              return resolve(req1.result.screenshot);
-            }
-            if (tradeNum) {
-              const req2 = store.get(`num_${tradeNum}`);
-              req2.onsuccess = function() {
-                resolve(req2.result && req2.result.screenshot ? req2.result.screenshot : null);
-              };
-              req2.onerror = () => resolve(null);
-            } else {
-              resolve(null);
-            }
-          };
-          req1.onerror = () => resolve(null);
-        } else if (tradeNum) {
-          const req2 = store.get(`num_${tradeNum}`);
-          req2.onsuccess = function() {
-            resolve(req2.result && req2.result.screenshot ? req2.result.screenshot : null);
-          };
-          req2.onerror = () => resolve(null);
-        } else {
-          resolve(null);
-        }
+        const req = store.get(key);
+        req.onsuccess = () => resolve(extractCharts(req.result));
+        req.onerror = () => resolve(null);
       });
+
+      if (tradeId) {
+        const byId = await readKey(String(tradeId));
+        if (byId) return byId;
+      }
+      if (tradeNum) {
+        return await readKey(`num_${tradeNum}`);
+      }
+      return null;
     } catch (err) {
-      console.warn('TradeStorage getScreenshot error:', err);
+      console.warn('TradeStorage getTradeCharts error:', err);
       return null;
     }
+  }
+
+  async function getScreenshot(tradeId, tradeNum = null) {
+    const charts = await getTradeCharts(tradeId, tradeNum);
+    if (!charts || !charts.length) return null;
+    const withImg = charts.find(c => c && c.screenshot);
+    return withImg ? withImg.screenshot : null;
   }
 
   async function deleteScreenshot(tradeId, tradeNum = null) {
@@ -175,6 +193,8 @@ const TradeStorage = (function() {
   }
 
   return {
+    saveTradeCharts,
+    getTradeCharts,
     saveScreenshot,
     getScreenshot,
     deleteScreenshot,
@@ -214,10 +234,84 @@ const TradeApp = (function() {
     plan: 'ALL'
   };
 
-  // Form state
-  let currentScreenshot = '';
+  // Form & Gallery state
+  let currentCharts = [];
+  let nextChartLabel = 'Entry / Setup';
+  let lightboxState = { items: [], index: 0, baseCaption: '' };
   let activeMistakes = new Set();
   let chartMode = 'dollar'; // 'dollar' or 'r'
+
+  /** Convert a Google Drive share URL to a direct loadable image URL. */
+  function driveUrlToDirectImg(url) {
+    if (!url || typeof url !== 'string') return '';
+    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    return match ? `https://lh3.googleusercontent.com/d/${match[1]}` : url;
+  }
+
+  /** Return the best display image src for a chart entry (local base64 first, then Drive). */
+  function getChartDisplaySrc(chart) {
+    if (!chart) return '';
+    if (chart.screenshot && typeof chart.screenshot === 'string' && chart.screenshot.startsWith('data:')) {
+      return chart.screenshot;
+    }
+    if (chart.chartUrl) {
+      return driveUrlToDirectImg(chart.chartUrl);
+    }
+    return chart.screenshot || '';
+  }
+
+  /** Normalize single-chart and legacy chart fields into a canonical charts array. */
+  function normalizeTradeCharts(trade) {
+    if (!trade) return [];
+    if (Array.isArray(trade.charts)) {
+      return trade.charts
+        .filter(c => c && (c.screenshot || c.chartUrl || c.id || c.label))
+        .map((c, idx) => ({
+          id: c.id || `ch_${idx}`,
+          label: (c.label || (idx === 0 ? 'Entry / Setup' : `After / Chart ${idx + 1}`)).trim(),
+          screenshot: typeof c.screenshot === 'string' ? c.screenshot : '',
+          chartUrl: typeof c.chartUrl === 'string' ? c.chartUrl : '',
+          addedAt: c.addedAt || trade.date || ''
+        }));
+    }
+
+    if (Array.isArray(trade.chartUrls) && trade.chartUrls.length > 0) {
+      return trade.chartUrls
+        .filter(Boolean)
+        .map((url, idx) => ({
+          id: `ch_${idx}`,
+          label: idx === 0 ? 'Entry / Setup' : `After / Chart ${idx + 1}`,
+          screenshot: idx === 0 ? (trade.screenshot || '') : '',
+          chartUrl: url,
+          addedAt: trade.date || ''
+        }));
+    }
+
+    if (trade.screenshot || trade.chartUrl) {
+      return [{
+        id: 'ch_0',
+        label: 'Entry / Setup',
+        screenshot: trade.screenshot || '',
+        chartUrl: trade.chartUrl || '',
+        addedAt: trade.date || ''
+      }];
+    }
+
+    return [];
+  }
+
+  /** Keep legacy single-chart fields synchronized with trade.charts. */
+  function syncLegacyChartFields(trade) {
+    if (!trade) return trade;
+    const hasExplicitArr = Array.isArray(trade.charts);
+    const normalized = normalizeTradeCharts(trade);
+    trade.charts = normalized;
+    trade.screenshot = (normalized.find(c => c.screenshot && c.screenshot.startsWith('data:')) || normalized[0] || {}).screenshot || '';
+    trade.chartUrl = (normalized.find(c => c.chartUrl) || {}).chartUrl || '';
+    trade.chartUrls = normalized.map(c => c.chartUrl).filter(Boolean);
+    trade.hasScreenshot = normalized.length > 0 || (!hasExplicitArr && Boolean(trade.hasScreenshot));
+    return trade;
+  }
 
   // Chart instances
   let equityChart = null;
@@ -442,19 +536,52 @@ const TradeApp = (function() {
     hydrateScreenshots();
   }
 
+  async function hydrateTradeChartsFromStorage(trade, tradeId = null, tradeNum = null) {
+    if (typeof TradeStorage === 'undefined') {
+      return trade ? syncLegacyChartFields(trade).charts : [];
+    }
+    const id = trade ? trade.id : tradeId;
+    const num = trade ? trade.tradeNum : tradeNum;
+    const storedCharts = await TradeStorage.getTradeCharts(id, num);
+    if (!storedCharts || !storedCharts.length) {
+      return trade ? syncLegacyChartFields(trade).charts : [];
+    }
+    if (!trade) return storedCharts;
+
+    const existingCharts = normalizeTradeCharts(trade);
+    if (existingCharts.length === 0) {
+      trade.charts = storedCharts;
+    } else {
+      storedCharts.forEach((sc, idx) => {
+        if (!sc.screenshot) return;
+        const match = existingCharts.find(ec => ec.id === sc.id) || existingCharts[idx];
+        if (match && !match.screenshot) {
+          match.screenshot = sc.screenshot;
+        } else if (!match) {
+          existingCharts.push(sc);
+        }
+      });
+      trade.charts = existingCharts;
+    }
+    syncLegacyChartFields(trade);
+    return trade.charts;
+  }
+
   async function hydrateScreenshots() {
     if (typeof TradeStorage === 'undefined') return;
     let anyHydrated = false;
     for (const t of trades) {
-      if (!t.screenshot) {
-        const img = await TradeStorage.getScreenshot(t.id, t.tradeNum);
-        if (img) {
-          t.screenshot = img;
-          t.hasScreenshot = true;
+      const chartsBefore = normalizeTradeCharts(t);
+      const missingLocalImg = chartsBefore.length === 0 || chartsBefore.some(c => !c.screenshot);
+      if (missingLocalImg) {
+        const beforeDataCount = chartsBefore.filter(c => c.screenshot && c.screenshot.startsWith('data:')).length;
+        const hydrated = await hydrateTradeChartsFromStorage(t);
+        const afterDataCount = hydrated.filter(c => c.screenshot && c.screenshot.startsWith('data:')).length;
+        if (afterDataCount > beforeDataCount || hydrated.length > chartsBefore.length) {
           anyHydrated = true;
         }
       } else {
-        t.hasScreenshot = true;
+        syncLegacyChartFields(t);
       }
     }
     if (anyHydrated) {
@@ -490,6 +617,14 @@ const TradeApp = (function() {
           if (c.screenshot) {
             c.hasScreenshot = true;
             delete c.screenshot;
+          }
+          if (Array.isArray(c.charts)) {
+            c.charts = c.charts.map(ch => {
+              const stripped = Object.assign({}, ch);
+              if (stripped.screenshot) delete stripped.screenshot;
+              return stripped;
+            });
+            if (c.charts.length > 0) c.hasScreenshot = true;
           }
           return c;
         });
@@ -804,11 +939,16 @@ const TradeApp = (function() {
           ${reviewInfo}
         </td>
         <td class="py-3 px-3 text-center">
-          ${(t.screenshot || t.chartUrl || t.hasScreenshot) ? `
-            <button type="button" class="btn-preview-thumb p-1 rounded-md hover:bg-slate-700 text-indigo-400 transition" data-id="${t.id}" data-num="${t.tradeNum}" title="Click to view chart screenshot">
+          ${(() => {
+            const chartCount = normalizeTradeCharts(t).filter(c => getChartDisplaySrc(c)).length || ((t.screenshot || t.chartUrl || t.hasScreenshot) ? 1 : 0);
+            if (!chartCount) return '<span class="text-slate-600">-</span>';
+            return `
+            <button type="button" class="btn-preview-thumb inline-flex items-center gap-1 px-1.5 py-1 rounded-md hover:bg-slate-700 text-indigo-400 transition" data-id="${t.id}" data-num="${t.tradeNum}" title="${chartCount > 1 ? `Click to view ${chartCount} charts` : 'Click to view chart screenshot'}">
               <i data-lucide="image" class="w-4 h-4"></i>
+              ${chartCount > 1 ? `<span class="text-[10px] font-bold px-1 rounded bg-indigo-500/20 text-indigo-400 leading-tight">${chartCount}</span>` : ''}
             </button>
-          ` : '<span class="text-slate-600">-</span>'}
+          `;
+          })()}
         </td>
         <td class="py-3 px-4 text-center whitespace-nowrap">
           <div class="flex items-center justify-center space-x-1.5" onclick="event.stopPropagation()">
@@ -851,21 +991,24 @@ const TradeApp = (function() {
         const tradeId = btn.getAttribute('data-id');
         const tradeNum = btn.getAttribute('data-num');
         const trade = trades.find(t => t.id === tradeId || String(t.tradeNum) === String(tradeNum));
-        let img = trade ? trade.screenshot : null;
-        if (!img && typeof TradeStorage !== 'undefined') {
-          img = await TradeStorage.getScreenshot(tradeId, tradeNum);
-          if (trade && img) {
-            trade.screenshot = img;
-            trade.hasScreenshot = true;
-          }
+        let charts = trade ? normalizeTradeCharts(trade) : [];
+        if (trade && (charts.length === 0 || charts.some(c => !c.screenshot))) {
+          charts = await hydrateTradeChartsFromStorage(trade, tradeId, tradeNum);
+        } else if (!trade) {
+          charts = await hydrateTradeChartsFromStorage(null, tradeId, tradeNum);
         }
-        const driveUrl = trade ? (trade.chartUrl || '') : '';
-        if (img) {
-          openLightbox(img, `${trade ? trade.symbol : 'Trade'} (${trade ? trade.direction : ''}) — Trade #${trade ? trade.tradeNum : tradeNum}`, driveUrl);
-        } else if (driveUrl) {
-          const fileIdMatch = driveUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-          const directImg = fileIdMatch ? `https://lh3.googleusercontent.com/d/${fileIdMatch[1]}` : driveUrl;
-          openLightbox(directImg, `${trade ? trade.symbol : 'Trade'} (${trade ? trade.direction : ''}) — Trade #${trade ? trade.tradeNum : tradeNum}`, driveUrl);
+
+        const galleryItems = charts
+          .map((c, idx) => ({
+            src: getChartDisplaySrc(c),
+            label: c.label || `Chart ${idx + 1}`,
+            externalUrl: c.chartUrl || ''
+          }))
+          .filter(item => item.src);
+
+        if (galleryItems.length > 0) {
+          const baseTitle = `${trade ? trade.symbol : 'Trade'} (${trade ? trade.direction : ''}) — Trade #${trade ? trade.tradeNum : tradeNum}`;
+          openLightboxGallery(galleryItems, 0, baseTitle);
         } else {
           GoogleDriveSync.showToast('Chart screenshot not found.', 'info');
         }
@@ -1113,45 +1256,65 @@ const TradeApp = (function() {
     renderCharts();
   }
 
-  // COPY-PASTE SCREENSHOT & UPLOAD ENGINE
+  function setNextChartStage(label) {
+    nextChartLabel = label || 'Entry / Setup';
+    document.querySelectorAll('#chart-stage-chips .chart-stage-chip').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.val === nextChartLabel);
+    });
+    const nextLblEl = document.getElementById('dropzone-next-label');
+    if (nextLblEl) nextLblEl.textContent = nextChartLabel;
+  }
+
+  // COPY-PASTE SCREENSHOT & MULTI-CHART UPLOAD ENGINE
   function bindPasteAndUpload() {
     const dropzone = document.getElementById('screenshot-dropzone');
     const fileInput = document.getElementById('file-screenshot-input');
     const modal = document.getElementById('modal-trade');
 
-    // 1. Global Clipboard Paste Listener (Ctrl + V anywhere when modal is open)
+    // Stage preset buttons
+    document.querySelectorAll('#chart-stage-chips .chart-stage-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        setNextChartStage(chip.dataset.val);
+      });
+    });
+
+    // 1. Global Clipboard Paste Listener (Ctrl + V anywhere when modal is open appends a chart)
     window.addEventListener('paste', function(e) {
       if (modal.classList.contains('hidden')) return;
 
       const items = (e.clipboardData || e.originalEvent?.clipboardData)?.items;
       if (!items) return;
 
+      let pastedImage = false;
       for (let i = 0; i < items.length; i++) {
         if (items[i].type.indexOf('image') !== -1) {
           const blob = items[i].getAsFile();
-          processScreenshotFile(blob);
-          GoogleDriveSync.showToast('Screenshot pasted from clipboard!', 'success');
-          e.preventDefault();
-          break;
+          if (blob) {
+            processScreenshotFile(blob);
+            pastedImage = true;
+          }
         }
+      }
+
+      if (pastedImage) {
+        GoogleDriveSync.showToast(`Added "${nextChartLabel}" chart from clipboard!`, 'success');
+        e.preventDefault();
       }
     });
 
-    // 2. Dropzone Click to Browse
-    dropzone.addEventListener('click', (e) => {
-      if (e.target.closest('#btn-remove-screenshot') || e.target.closest('#btn-view-screenshot-fullscreen')) {
-        return;
-      }
+    // 2. Dropzone Click to Browse (supports multiple files)
+    dropzone.addEventListener('click', () => {
       fileInput.click();
     });
 
-    fileInput.addEventListener('change', (e) => {
-      if (fileInput.files && fileInput.files[0]) {
-        processScreenshotFile(fileInput.files[0]);
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files && fileInput.files.length > 0) {
+        Array.from(fileInput.files).forEach(file => processScreenshotFile(file));
+        fileInput.value = '';
       }
     });
 
-    // 3. Drag and Drop onto Dropzone
+    // 3. Drag and Drop onto Dropzone (supports multiple files)
     ['dragenter', 'dragover'].forEach(eventName => {
       dropzone.addEventListener(eventName, (e) => {
         e.preventDefault();
@@ -1168,22 +1331,10 @@ const TradeApp = (function() {
 
     dropzone.addEventListener('drop', (e) => {
       e.preventDefault();
-      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-        processScreenshotFile(e.dataTransfer.files[0]);
-      }
-    });
-
-    // 4. Remove Screenshot Button
-    document.getElementById('btn-remove-screenshot').addEventListener('click', (e) => {
-      e.stopPropagation();
-      clearScreenshot();
-    });
-
-    // 5. Fullscreen Preview from Modal
-    document.getElementById('btn-view-screenshot-fullscreen').addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (currentScreenshot) {
-        openLightbox(currentScreenshot, 'Pasted Trade Chart Screenshot');
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        Array.from(e.dataTransfer.files)
+          .filter(f => f.type.startsWith('image/'))
+          .forEach(file => processScreenshotFile(file));
       }
     });
   }
@@ -1211,55 +1362,262 @@ const TradeApp = (function() {
 
         // Compress as JPEG 0.82
         const compressedBase64 = canvas.toDataURL('image/jpeg', 0.82);
-        setScreenshot(compressedBase64);
+        addModalChart(compressedBase64);
       };
       img.src = event.target.result;
     };
     reader.readAsDataURL(file);
   }
 
-  function setScreenshot(base64) {
-    currentScreenshot = base64;
-    document.getElementById('trade-screenshot-data').value = base64;
-    document.getElementById('screenshot-preview-img').src = base64;
-    document.getElementById('dropzone-empty-state').classList.add('hidden');
-    document.getElementById('dropzone-preview-state').classList.remove('hidden');
-    document.getElementById('dropzone-preview-state').classList.add('flex');
-    document.getElementById('screenshot-dropzone').classList.add('has-image');
+  function addModalChart(imgDataUrl, explicitLabel = null, chartUrl = '') {
+    const defaultLabel = nextChartLabel || (currentCharts.length === 0 ? 'Entry / Setup' : 'After / Follow-up');
+    const label = (explicitLabel || defaultLabel).trim();
+    currentCharts.push({
+      id: 'ch_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      label,
+      screenshot: (imgDataUrl && imgDataUrl.startsWith('data:')) ? imgDataUrl : '',
+      chartUrl: chartUrl || (imgDataUrl && !imgDataUrl.startsWith('data:') ? imgDataUrl : ''),
+      addedAt: new Date().toISOString()
+    });
+    if (currentCharts.length === 1 && !explicitLabel && nextChartLabel === 'Entry / Setup') {
+      setNextChartStage('After / Follow-up');
+    }
+    renderModalCharts();
+  }
+
+  function openModalChartsLightbox(startIndex = 0) {
+    const galleryItems = currentCharts
+      .map((c, idx) => ({
+        src: getChartDisplaySrc(c),
+        label: c.label || `Chart ${idx + 1}`,
+        externalUrl: c.chartUrl || ''
+      }))
+      .filter(item => item.src);
+    if (!galleryItems.length) return;
+    const sym = document.getElementById('input-trade-symbol')?.value.trim().toUpperCase() || 'Trade';
+    openLightboxGallery(galleryItems, startIndex, `${sym} Chart Preview`);
+  }
+
+  function renderModalCharts() {
+    const listEl = document.getElementById('modal-charts-list');
+    const emptyEl = document.getElementById('dropzone-empty-state');
+    const addMoreEl = document.getElementById('dropzone-add-more-state');
+    const dropzone = document.getElementById('screenshot-dropzone');
+    const countBadge = document.getElementById('modal-charts-count');
+    const hiddenInput = document.getElementById('trade-screenshot-data');
+
+    const count = currentCharts.length;
+    if (countBadge) countBadge.textContent = String(count);
+    if (hiddenInput) hiddenInput.value = count > 0 ? getChartDisplaySrc(currentCharts[0]) : '';
+
+    if (count === 0) {
+      emptyEl.classList.remove('hidden');
+      addMoreEl.classList.add('hidden');
+      addMoreEl.classList.remove('flex');
+      dropzone.classList.remove('has-image');
+      listEl.classList.add('hidden');
+      listEl.innerHTML = '';
+      return;
+    }
+
+    emptyEl.classList.add('hidden');
+    addMoreEl.classList.remove('hidden');
+    addMoreEl.classList.add('flex');
+    dropzone.classList.add('has-image');
+    listEl.classList.remove('hidden');
+    listEl.innerHTML = '';
+
+    currentCharts.forEach((chart, idx) => {
+      const displaySrc = getChartDisplaySrc(chart);
+      const card = document.createElement('div');
+      card.className = 'chart-item-card p-2.5 flex flex-col';
+
+      // Top bar: index + sync badge + controls
+      const header = document.createElement('div');
+      header.className = 'flex items-center justify-between gap-1.5 mb-2';
+
+      const leftInfo = document.createElement('div');
+      leftInfo.className = 'flex items-center space-x-1.5';
+      const idxBadge = document.createElement('span');
+      idxBadge.className = 'text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-400';
+      idxBadge.textContent = `#${idx + 1}`;
+      leftInfo.appendChild(idxBadge);
+
+      const syncBadge = document.createElement('span');
+      syncBadge.className = chart.chartUrl
+        ? 'text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400'
+        : 'text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400';
+      syncBadge.textContent = chart.chartUrl ? 'Drive' : 'New';
+      leftInfo.appendChild(syncBadge);
+
+      const actions = document.createElement('div');
+      actions.className = 'flex items-center space-x-1';
+
+      if (idx > 0) {
+        const moveBtn = document.createElement('button');
+        moveBtn.type = 'button';
+        moveBtn.className = 'p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition';
+        moveBtn.title = 'Move earlier';
+        moveBtn.innerHTML = '<i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>';
+        moveBtn.addEventListener('click', () => {
+          const prev = currentCharts[idx - 1];
+          currentCharts[idx - 1] = currentCharts[idx];
+          currentCharts[idx] = prev;
+          renderModalCharts();
+        });
+        actions.appendChild(moveBtn);
+      }
+
+      const zoomBtn = document.createElement('button');
+      zoomBtn.type = 'button';
+      zoomBtn.className = 'p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-indigo-400 transition';
+      zoomBtn.title = 'View fullscreen';
+      zoomBtn.innerHTML = '<i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>';
+      zoomBtn.addEventListener('click', () => openModalChartsLightbox(idx));
+      actions.appendChild(zoomBtn);
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'p-1 rounded hover:bg-rose-950/70 text-slate-400 hover:text-rose-400 transition';
+      removeBtn.title = 'Remove this chart';
+      removeBtn.innerHTML = '<i data-lucide="trash-2" class="w-3.5 h-3.5"></i>';
+      removeBtn.addEventListener('click', () => {
+        currentCharts.splice(idx, 1);
+        if (currentCharts.length === 0) setNextChartStage('Entry / Setup');
+        renderModalCharts();
+      });
+      actions.appendChild(removeBtn);
+
+      header.appendChild(leftInfo);
+      header.appendChild(actions);
+
+      // Thumbnail
+      const thumbWrap = document.createElement('div');
+      thumbWrap.className = 'w-full h-32 rounded-lg overflow-hidden border border-slate-700 bg-black/50 flex items-center justify-center cursor-zoom-in';
+      thumbWrap.addEventListener('click', () => openModalChartsLightbox(idx));
+      const imgEl = document.createElement('img');
+      imgEl.src = displaySrc;
+      imgEl.alt = chart.label || `Chart ${idx + 1}`;
+      imgEl.className = 'w-full h-full object-contain';
+      thumbWrap.appendChild(imgEl);
+
+      // Editable stage/notes label input
+      const labelInput = document.createElement('input');
+      labelInput.type = 'text';
+      labelInput.value = chart.label || '';
+      labelInput.placeholder = 'Tag (e.g. Entry, 1H After, Exit)';
+      labelInput.className = 'mt-2 w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-[11px] font-medium text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500';
+      labelInput.addEventListener('input', () => {
+        chart.label = labelInput.value;
+      });
+
+      card.appendChild(header);
+      card.appendChild(thumbWrap);
+      card.appendChild(labelInput);
+      listEl.appendChild(card);
+    });
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
   function clearScreenshot() {
-    currentScreenshot = '';
-    document.getElementById('trade-screenshot-data').value = '';
-    document.getElementById('screenshot-preview-img').src = '';
-    document.getElementById('dropzone-empty-state').classList.remove('hidden');
-    document.getElementById('dropzone-preview-state').classList.add('hidden');
-    document.getElementById('dropzone-preview-state').classList.remove('flex');
-    document.getElementById('screenshot-dropzone').classList.remove('has-image');
+    currentCharts = [];
+    setNextChartStage('Entry / Setup');
+    renderModalCharts();
   }
 
-  // Lightbox Modal Controller
-  function openLightbox(imgSrc, caption = '', externalUrl = '') {
-    const lightbox = document.getElementById('modal-lightbox');
+  // Lightbox Gallery Modal Controller
+  function renderLightboxSlide() {
+    const items = lightboxState.items || [];
+    if (!items.length) return;
+    const total = items.length;
+    const idx = ((lightboxState.index % total) + total) % total;
+    lightboxState.index = idx;
+    const item = items[idx];
+
     const imgEl = document.getElementById('lightbox-img');
     const capEl = document.getElementById('lightbox-caption');
     const driveLink = document.getElementById('lightbox-drive-link');
+    const counterEl = document.getElementById('lightbox-counter');
+    const headerNavEl = document.getElementById('lightbox-header-nav');
+    const prevOverlay = document.getElementById('btn-lightbox-prev-overlay');
+    const nextOverlay = document.getElementById('btn-lightbox-next-overlay');
+    const thumbsEl = document.getElementById('lightbox-thumbs');
 
-    imgEl.src = imgSrc;
-    capEl.textContent = caption;
+    imgEl.src = item.src;
+    capEl.textContent = item.label
+      ? `${lightboxState.baseCaption} • ${item.label}`
+      : lightboxState.baseCaption;
 
     if (driveLink) {
-      if (externalUrl) {
-        driveLink.href = externalUrl;
+      if (item.externalUrl) {
+        driveLink.href = item.externalUrl;
         driveLink.classList.remove('hidden');
       } else {
         driveLink.classList.add('hidden');
       }
     }
 
+    const multi = total > 1;
+    if (counterEl) {
+      counterEl.textContent = `${idx + 1} / ${total}`;
+      counterEl.classList.toggle('hidden', !multi);
+    }
+    if (headerNavEl) {
+      headerNavEl.classList.toggle('hidden', !multi);
+      headerNavEl.classList.toggle('flex', multi);
+    }
+    if (prevOverlay) prevOverlay.classList.toggle('hidden', !multi);
+    if (nextOverlay) nextOverlay.classList.toggle('hidden', !multi);
+
+    if (thumbsEl) {
+      thumbsEl.innerHTML = '';
+      thumbsEl.classList.toggle('hidden', !multi);
+      if (multi) {
+        items.forEach((thumbItem, i) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = `lightbox-thumb-btn shrink-0 rounded-lg p-1 flex items-center space-x-2 max-w-[180px] ${i === idx ? 'active' : 'opacity-75 hover:opacity-100'}`;
+          const tImg = document.createElement('img');
+          tImg.src = thumbItem.src;
+          tImg.alt = thumbItem.label || `Chart ${i + 1}`;
+          tImg.className = 'w-12 h-8 object-cover rounded';
+          const tLbl = document.createElement('span');
+          tLbl.className = 'text-[10px] font-semibold truncate';
+          tLbl.textContent = thumbItem.label ? `#${i + 1} ${thumbItem.label}` : `Chart #${i + 1}`;
+          btn.appendChild(tImg);
+          btn.appendChild(tLbl);
+          btn.addEventListener('click', () => {
+            lightboxState.index = i;
+            renderLightboxSlide();
+          });
+          thumbsEl.appendChild(btn);
+        });
+      }
+    }
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
+  function stepLightbox(delta) {
+    if (!lightboxState.items || lightboxState.items.length <= 1) return;
+    lightboxState.index += delta;
+    renderLightboxSlide();
+  }
+
+  function openLightboxGallery(items, startIndex = 0, baseCaption = '') {
+    const valid = (items || []).filter(it => it && it.src);
+    if (!valid.length) return;
+    lightboxState = { items: valid, index: startIndex || 0, baseCaption: baseCaption || '' };
+    renderLightboxSlide();
+
+    const lightbox = document.getElementById('modal-lightbox');
     lightbox.classList.remove('hidden');
     lightbox.classList.add('flex');
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
+  function openLightbox(imgSrc, caption = '', externalUrl = '') {
+    openLightboxGallery([{ src: imgSrc, label: '', externalUrl }], 0, caption);
   }
 
   function closeLightbox() {
@@ -1347,19 +1705,34 @@ const TradeApp = (function() {
       // Notes
       document.getElementById('input-trade-notes').value = trade.notes || '';
 
-      // Screenshot
-      if (trade.screenshot) {
-        setScreenshot(trade.screenshot);
-      } else if (trade.chartUrl) {
-        const fileIdMatch = trade.chartUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-        const directImg = fileIdMatch ? `https://lh3.googleusercontent.com/d/${fileIdMatch[1]}` : trade.chartUrl;
-        setScreenshot(directImg);
-      } else if ((trade.hasScreenshot || trade.tradeNum) && typeof TradeStorage !== 'undefined') {
-        TradeStorage.getScreenshot(trade.id, trade.tradeNum).then(img => {
-          if (img) {
-            trade.screenshot = img;
-            trade.hasScreenshot = true;
-            setScreenshot(img);
+      // Charts (multi-chart support + IndexedDB fallback hydration)
+      currentCharts = normalizeTradeCharts(trade).map(c => Object.assign({}, c));
+      renderModalCharts();
+      setNextChartStage(currentCharts.length > 0 ? 'After / Follow-up' : 'Entry / Setup');
+
+      if ((currentCharts.length === 0 || currentCharts.some(c => !c.screenshot)) && typeof TradeStorage !== 'undefined') {
+        const openedCount = currentCharts.length;
+        hydrateTradeChartsFromStorage(trade).then(hydrated => {
+          const activeId = document.getElementById('trade-id').value;
+          if (modal.classList.contains('hidden') || activeId !== trade.id || !hydrated || !hydrated.length) return;
+          let updated = false;
+          if (currentCharts.length === 0 && openedCount === 0) {
+            currentCharts = hydrated.map(c => Object.assign({}, c));
+            updated = true;
+          } else {
+            currentCharts.forEach((mc, idx) => {
+              if (!mc.screenshot) {
+                const match = hydrated.find(hc => (hc.id && hc.id === mc.id) || (hc.chartUrl && hc.chartUrl === mc.chartUrl)) || hydrated[idx];
+                if (match && match.screenshot) {
+                  mc.screenshot = match.screenshot;
+                  updated = true;
+                }
+              }
+            });
+          }
+          if (updated) {
+            renderModalCharts();
+            setNextChartStage(currentCharts.length > 0 ? 'After / Follow-up' : 'Entry / Setup');
           }
         });
       }
@@ -1478,22 +1851,15 @@ const TradeApp = (function() {
     const emotion = document.getElementById('input-trade-emotion').value;
     const notes = document.getElementById('input-trade-notes').value.trim();
 
-    let screenshot = '';
-    let chartUrl = '';
-    if (currentScreenshot) {
-      if (currentScreenshot.startsWith('https://lh3.googleusercontent.com') || currentScreenshot.startsWith('https://drive.google.com')) {
-        screenshot = existingTrade ? (existingTrade.screenshot || '') : '';
-        chartUrl = existingTrade ? (existingTrade.chartUrl || currentScreenshot) : currentScreenshot;
-      } else if (currentScreenshot.startsWith('data:')) {
-        screenshot = currentScreenshot;
-        chartUrl = (existingTrade && currentScreenshot === existingTrade.screenshot)
-          ? (existingTrade.chartUrl || '')
-          : '';
-      } else {
-        screenshot = existingTrade ? (existingTrade.screenshot || '') : '';
-        chartUrl = currentScreenshot;
-      }
-    }
+    const cleanCharts = currentCharts
+      .map((c, idx) => ({
+        id: c.id || `ch_${Date.now()}_${idx}`,
+        label: (c.label || (idx === 0 ? 'Entry / Setup' : `After / Chart ${idx + 1}`)).trim(),
+        screenshot: (c.screenshot && typeof c.screenshot === 'string' && c.screenshot.startsWith('data:')) ? c.screenshot : '',
+        chartUrl: (c.chartUrl && typeof c.chartUrl === 'string') ? c.chartUrl : '',
+        addedAt: c.addedAt || new Date().toISOString()
+      }))
+      .filter(c => c.screenshot || c.chartUrl);
 
     let tradeObj = {
       id,
@@ -1504,11 +1870,10 @@ const TradeApp = (function() {
       strategy,
       emotion,
       notes,
-      screenshot,
-      chartUrl,
-      hasScreenshot: Boolean(screenshot || chartUrl),
+      charts: cleanCharts,
       isMissed
     };
+    syncLegacyChartFields(tradeObj);
 
     if (isMissed) {
       // Missed trade details
@@ -1564,14 +1929,14 @@ const TradeApp = (function() {
       GoogleDriveSync.showToast(`Logged Trade #${tradeNum} of 100!`, 'success');
     }
 
-    saveTrades(true);
     if (typeof TradeStorage !== 'undefined') {
-      if (screenshot && screenshot.startsWith('data:')) {
-        TradeStorage.saveScreenshot(id, screenshot, tradeNum);
-      } else if (!currentScreenshot) {
+      if (cleanCharts.length > 0) {
+        TradeStorage.saveTradeCharts(id, cleanCharts, tradeNum);
+      } else {
         TradeStorage.deleteScreenshot(id, tradeNum);
       }
     }
+    saveTrades(true);
     closeTradeModal();
   }
 
@@ -1921,10 +2286,25 @@ const TradeApp = (function() {
       chip.addEventListener('click', () => selectEmotion(chip.dataset.val));
     });
 
-    // Lightbox Close
+    // Lightbox Close & Multi-Chart Navigation
     document.getElementById('btn-close-lightbox').addEventListener('click', closeLightbox);
     document.getElementById('modal-lightbox').addEventListener('click', (e) => {
       if (e.target.id === 'modal-lightbox') closeLightbox();
+    });
+    ['btn-lightbox-prev', 'btn-lightbox-prev-overlay'].forEach(btnId => {
+      const btn = document.getElementById(btnId);
+      if (btn) btn.addEventListener('click', (e) => { e.stopPropagation(); stepLightbox(-1); });
+    });
+    ['btn-lightbox-next', 'btn-lightbox-next-overlay'].forEach(btnId => {
+      const btn = document.getElementById(btnId);
+      if (btn) btn.addEventListener('click', (e) => { e.stopPropagation(); stepLightbox(1); });
+    });
+    document.addEventListener('keydown', (e) => {
+      const lightbox = document.getElementById('modal-lightbox');
+      if (!lightbox || lightbox.classList.contains('hidden')) return;
+      if (e.key === 'Escape') closeLightbox();
+      else if (e.key === 'ArrowLeft') stepLightbox(-1);
+      else if (e.key === 'ArrowRight') stepLightbox(1);
     });
 
     // Filter controls
@@ -2028,10 +2408,12 @@ const TradeApp = (function() {
     init,
     getTrades: () => trades,
     setTrades: (newTrades) => {
-      trades = newTrades;
+      trades = Array.isArray(newTrades) ? newTrades.map(t => syncLegacyChartFields(Object.assign({}, t))) : [];
       saveTrades(false);
       hydrateScreenshots();
     },
+    normalizeTradeCharts,
+    syncLegacyChartFields,
     calculateStats
   };
 })();

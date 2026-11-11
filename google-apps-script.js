@@ -64,35 +64,29 @@ function doPost(e) {
       var lastRow = sheet.getLastRow();
       var lastCol = Math.max(sheet.getLastColumn(), 15);
 
-      // Read existing chart links keyed by Trade # before clearing so sorting newest-first preserves charts
-      var existingKeys = (lastRow > 1) ? sheet.getRange(2, 1, lastRow - 1, 2).getValues() : [];
+      // Read existing chart links keyed by Trade # before clearing so sorting & updates preserve charts
+      var existingValues = (lastRow > 1) ? sheet.getRange(2, 1, lastRow - 1, lastCol).getValues() : [];
       var existingFormulas = (lastRow > 1) ? sheet.getRange(2, 1, lastRow - 1, lastCol).getFormulas() : [];
       var existingRichTexts = [];
       try {
         if (lastRow > 1) existingRichTexts = sheet.getRange(2, 1, lastRow - 1, lastCol).getRichTextValues();
       } catch (e) {}
 
-      var existingChartByKey = {};
-      for (var r = 0; r < existingKeys.length; r++) {
-        var existingUrl = '';
-        if (existingRichTexts && existingRichTexts[r] && existingRichTexts[r][14]) {
-          existingUrl = existingRichTexts[r][14].getLinkUrl() || '';
-        }
-        if (!existingUrl && existingFormulas && existingFormulas[r] && existingFormulas[r][14]) {
-          var ef = String(existingFormulas[r][14]);
-          var ematch = ef.match(/https?:\/\/[^\s"\)]+/);
-          if (ematch) existingUrl = ematch[0];
-        }
-        if (!existingUrl) continue;
+      var existingChartsByKey = {};
+      for (var r = 0; r < existingValues.length; r++) {
+        var existingRt = (existingRichTexts && existingRichTexts[r]) ? existingRichTexts[r][14] : null;
+        var existingFm = (existingFormulas && existingFormulas[r]) ? existingFormulas[r][14] : '';
+        var extracted = extractChartsFromCell_(existingRt, existingFm, existingValues[r][14]);
+        if (!extracted.length) continue;
 
-        var numKey = String(existingKeys[r][0] !== undefined ? existingKeys[r][0] : '').trim();
-        var rawExistingDate = existingKeys[r][1];
+        var numKey = String(existingValues[r][0] !== undefined ? existingValues[r][0] : '').trim();
+        var rawExistingDate = existingValues[r][1];
         var dateKey = rawExistingDate instanceof Date ? rawExistingDate.toISOString() : String(rawExistingDate || '').trim();
         if (numKey && dateKey) {
-          existingChartByKey[numKey + '|' + dateKey] = existingUrl;
+          existingChartsByKey[numKey + '|' + dateKey] = extracted;
         }
         if (numKey && numKey !== '0') {
-          existingChartByKey[numKey] = existingUrl;
+          existingChartsByKey[numKey] = extracted;
         }
       }
 
@@ -100,34 +94,84 @@ function doPost(e) {
         sheet.getRange(2, 1, lastRow - 1, lastCol).clearContent();
       }
 
+      var colORichTexts = [];
       var rows = trades.map(function(t) {
         var mistakeText = Array.isArray(t.mistakes) ? t.mistakes.join('; ') : (t.mistake || '');
-        
-        // 1. Process Chart Screenshot: upload to Google Drive if new base64 image
-        var chartUrl = t.chartUrl || '';
-        if (!chartUrl && t.screenshot && typeof t.screenshot === 'string' && t.screenshot.indexOf('base64') !== -1) {
-          chartUrl = saveChartToDrive(t.screenshot, t.tradeNum, t.symbol);
-        }
 
-        // 2. Fallback to existing chart for this Trade # if not re-sent
         var tNumKey = String(t.tradeNum !== undefined ? t.tradeNum : '').trim();
         var tDateKey = String(t.date || '').trim();
-        if (!chartUrl && tNumKey && tDateKey && existingChartByKey[tNumKey + '|' + tDateKey]) {
-          chartUrl = existingChartByKey[tNumKey + '|' + tDateKey];
-        }
-        if (!chartUrl && tNumKey && tNumKey !== '0' && existingChartByKey[tNumKey]) {
-          chartUrl = existingChartByKey[tNumKey];
+        var existingCharts = (tNumKey && tDateKey && existingChartsByKey[tNumKey + '|' + tDateKey])
+          || (tNumKey && tNumKey !== '0' && existingChartsByKey[tNumKey])
+          || [];
+
+        // Collect normalized incoming charts (supports new t.charts array & legacy t.screenshot / t.chartUrl)
+        var hasChartsArr = Array.isArray(t.charts);
+        var incomingCharts = hasChartsArr
+          ? t.charts
+          : ((t.screenshot || t.chartUrl)
+              ? [{ label: 'Entry / Setup', screenshot: t.screenshot || '', chartUrl: t.chartUrl || '' }]
+              : []);
+
+        // Legacy fallback when payload omits charts altogether
+        if (!hasChartsArr && incomingCharts.length === 0 && existingCharts.length > 0) {
+          incomingCharts = existingCharts;
         }
 
-        // Formula or text for Column O
-        var chartCellFormula = '';
-        if (chartUrl === 'AUTHORIZATION_NEEDED') {
-          chartCellFormula = '⚠️ Click Run "authorizePermissions" in Apps Script';
-        } else if (chartUrl && chartUrl.indexOf('http') === 0) {
-          chartCellFormula = '=HYPERLINK("' + chartUrl + '", "📈 View Chart")';
-        } else {
-          chartCellFormula = '-';
+        var resolvedCharts = [];
+        var needsAuthWarning = false;
+
+        for (var ci = 0; ci < incomingCharts.length; ci++) {
+          var ch = incomingCharts[ci] || {};
+          var label = String(ch.label || (ci === 0 ? 'Entry / Setup' : 'After / Chart ' + (ci + 1))).trim();
+          var url = ch.chartUrl || '';
+
+          if (!url && ch.screenshot && typeof ch.screenshot === 'string' && ch.screenshot.indexOf('base64') !== -1) {
+            url = saveChartToDrive(ch.screenshot, t.tradeNum, t.symbol, label, ci + 1);
+          }
+
+          if (!url && existingCharts.length > 0) {
+            var matchedExisting = existingCharts[ci];
+            if (!matchedExisting) {
+              for (var ei = 0; ei < existingCharts.length; ei++) {
+                if (existingCharts[ei].label === label) {
+                  matchedExisting = existingCharts[ei];
+                  break;
+                }
+              }
+            }
+            if (matchedExisting && matchedExisting.chartUrl) {
+              url = matchedExisting.chartUrl;
+            }
+          }
+
+          if (url === 'AUTHORIZATION_NEEDED') {
+            needsAuthWarning = true;
+          } else if (url && url.indexOf('http') === 0) {
+            resolvedCharts.push({ label: label, chartUrl: url });
+          }
         }
+
+        // Build RichTextValue for Column O (supports 1 or multiple clickable chart links in one cell)
+        var rtBuilder = SpreadsheetApp.newRichTextValue();
+        if (needsAuthWarning) {
+          rtBuilder.setText('⚠️ Click Run "authorizePermissions" in Apps Script');
+        } else if (resolvedCharts.length > 0) {
+          var lines = [];
+          for (var li = 0; li < resolvedCharts.length; li++) {
+            lines.push('↗ ' + (resolvedCharts[li].label || ('Chart ' + (li + 1))));
+          }
+          var fullText = lines.join('\n');
+          rtBuilder.setText(fullText);
+          var offset = 0;
+          for (var lj = 0; lj < lines.length; lj++) {
+            var lineText = lines[lj];
+            rtBuilder.setLinkUrl(offset, offset + lineText.length, resolvedCharts[lj].chartUrl);
+            offset += lineText.length + 1;
+          }
+        } else {
+          rtBuilder.setText('-');
+        }
+        colORichTexts.push([rtBuilder.build()]);
 
         return [
           t.tradeNum || '',
@@ -144,11 +188,14 @@ function doPost(e) {
           t.emotion || '',
           t.missedReason || '',
           t.notes || '',
-          chartCellFormula
+          '-'
         ];
       });
 
       sheet.getRange(2, 1, rows.length, 15).setValues(rows);
+      var colORange = sheet.getRange(2, 15, rows.length, 1);
+      colORange.setRichTextValues(colORichTexts);
+      colORange.setWrap(true);
 
       // Format header row across 15 columns
       sheet.getRange(1, 1, 1, 15).setFontWeight("bold").setBackground("#131B2E").setFontColor("#FFFFFF");
@@ -169,7 +216,7 @@ function doPost(e) {
   }
 }
 
-function saveChartToDrive(base64Data, tradeNum, symbol) {
+function saveChartToDrive(base64Data, tradeNum, symbol, chartLabel, chartIndex) {
   if (!base64Data || typeof base64Data !== 'string') return '';
   if (base64Data.indexOf('http://') === 0 || base64Data.indexOf('https://') === 0) {
     return base64Data;
@@ -197,7 +244,11 @@ function saveChartToDrive(base64Data, tradeNum, symbol) {
 
     var decoded = Utilities.base64Decode(cleanBase64);
     var ext = (contentType === 'image/png') ? '.png' : '.jpg';
-    var fileName = 'Trade_' + (tradeNum || 'X') + '_' + (symbol || 'Chart') + '_' + Date.now() + ext;
+    var safeLabel = chartLabel
+      ? '_' + String(chartLabel).replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 24)
+      : '';
+    var idxPart = chartIndex ? '_Chart' + chartIndex : '';
+    var fileName = 'Trade_' + (tradeNum || 'X') + '_' + (symbol || 'Chart') + idxPart + safeLabel + '_' + Date.now() + ext;
     var blob = Utilities.newBlob(decoded, contentType, fileName);
     var file = folder.createFile(blob);
 
@@ -238,6 +289,66 @@ function sortTradesNewestFirst_(list) {
   });
 }
 
+function extractChartsFromCell_(richText, formula, cellText) {
+  var results = [];
+  var seen = {};
+
+  function addChart(label, url) {
+    if (!url || typeof url !== 'string') return;
+    var cleanUrl = url.trim();
+    if (!cleanUrl || seen[cleanUrl]) return;
+    seen[cleanUrl] = true;
+    var cleanLabel = String(label || '')
+      .replace(/^(?:📈|📊|🖼️|\u2197|•|-|\s)+/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!cleanLabel || cleanLabel === 'View Chart') {
+      cleanLabel = results.length === 0 ? 'Entry / Setup' : 'After / Chart ' + (results.length + 1);
+    }
+    results.push({ label: cleanLabel, chartUrl: cleanUrl });
+  }
+
+  if (richText) {
+    try {
+      var runs = richText.getRuns ? richText.getRuns() : [];
+      for (var i = 0; i < runs.length; i++) {
+        var rUrl = runs[i].getLinkUrl ? (runs[i].getLinkUrl() || '') : '';
+        if (rUrl) {
+          addChart(runs[i].getText ? runs[i].getText() : '', rUrl);
+        }
+      }
+    } catch (e) {}
+
+    if (results.length === 0 && richText.getLinkUrl) {
+      var singleUrl = richText.getLinkUrl() || '';
+      if (singleUrl) addChart('Entry / Setup', singleUrl);
+    }
+  }
+
+  if (results.length === 0 && formula) {
+    var fMatch = String(formula).match(/https?:\/\/[^\s"\)]+/g);
+    if (fMatch) {
+      for (var fi = 0; fi < fMatch.length; fi++) {
+        addChart('', fMatch[fi]);
+      }
+    }
+  }
+
+  if (results.length === 0 && cellText) {
+    var rawStr = String(cellText);
+    if (rawStr.indexOf('http') !== -1) {
+      var cMatch = rawStr.match(/https?:\/\/[^\s"\)]+/g);
+      if (cMatch) {
+        for (var ci = 0; ci < cMatch.length; ci++) {
+          addChart('', cMatch[ci]);
+        }
+      }
+    }
+  }
+
+  return results;
+}
+
 function doGet(e) {
   try {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
@@ -273,29 +384,20 @@ function doGet(e) {
       var parsedNum = parseInt(row[0], 10);
       var tradeNum = !isNaN(parsedNum) ? parsedNum : (isMissed ? 0 : (data.length - idx));
 
-      // Extract chart URL from Column 15 (Column O) via RichText, Formula, or plain text
-      var chartUrl = '';
-
-      // 1. Try RichText hyperlink
-      if (richTexts && richTexts[idx] && richTexts[idx][14]) {
-        chartUrl = richTexts[idx][14].getLinkUrl() || '';
-      }
-
-      // 2. Try Formula (=HYPERLINK("https://...", "..."))
-      if (!chartUrl && formulas && formulas[idx] && formulas[idx][14]) {
-        var f = String(formulas[idx][14]);
-        var match = f.match(/https?:\/\/[^\s"\)]+/);
-        if (match) chartUrl = match[0];
-      }
-
-      // 3. Try plain text value
-      if (!chartUrl) {
-        var chartCellVal = String(row[14] || '');
-        if (chartCellVal.indexOf('http') !== -1) {
-          var match2 = chartCellVal.match(/https?:\/\/[^\s"\)]+/);
-          chartUrl = match2 ? match2[0] : chartCellVal;
-        }
-      }
+      // Extract all chart links + labels from Column 15 (Column O)
+      var cellRt = (richTexts && richTexts[idx]) ? richTexts[idx][14] : null;
+      var cellFm = (formulas && formulas[idx]) ? formulas[idx][14] : '';
+      var extractedCharts = extractChartsFromCell_(cellRt, cellFm, row[14]);
+      var chartUrl = extractedCharts.length > 0 ? extractedCharts[0].chartUrl : '';
+      var chartUrls = extractedCharts.map(function(c) { return c.chartUrl; });
+      var chartsList = extractedCharts.map(function(c, ci) {
+        return {
+          id: 'ch_' + tradeNum + '_' + ci,
+          label: c.label,
+          chartUrl: c.chartUrl,
+          addedAt: dateStr
+        };
+      });
 
       return {
         id: 'trade_' + tradeNum + '_' + (Date.now() + idx),
@@ -315,8 +417,10 @@ function doGet(e) {
         emotion: String(row[11] || 'Calm & Patient'),
         missedReason: String(row[12] || ''),
         notes: String(row[13] || ''),
+        charts: chartsList,
         chartUrl: chartUrl,
-        hasScreenshot: Boolean(chartUrl)
+        chartUrls: chartUrls,
+        hasScreenshot: chartsList.length > 0
       };
     });
 

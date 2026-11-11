@@ -267,6 +267,78 @@ const GoogleDriveSync = (function() {
     return await res.json();
   }
 
+  /**
+   * Merge charts across remote (Sheet), local state, and IndexedDB without losing
+   * unsynced local charts or extra local charts when an older single-chart Apps Script responds.
+   * Returns { charts, hasUnsyncedLocal }.
+   */
+  function mergeTradeCharts(remoteTrade, localTrade, dbCharts) {
+    const normalize = (typeof TradeApp !== 'undefined' && TradeApp.normalizeTradeCharts)
+      ? TradeApp.normalizeTradeCharts
+      : (t => (t && Array.isArray(t.charts) ? t.charts : []));
+
+    const remoteHasExplicitCharts = remoteTrade && Array.isArray(remoteTrade.charts);
+    const remoteCharts = normalize(remoteTrade);
+    const localCharts = normalize(localTrade);
+    const storedCharts = Array.isArray(dbCharts) ? dbCharts : [];
+
+    // Combine local state and IndexedDB backup into one local chart list (preserving base64)
+    const combinedLocal = localCharts.map(c => Object.assign({}, c));
+    storedCharts.forEach((sc, idx) => {
+      if (!sc) return;
+      const match = combinedLocal.find(lc => (lc.id && lc.id === sc.id) || (lc.chartUrl && sc.chartUrl && lc.chartUrl === sc.chartUrl)) || combinedLocal[idx];
+      if (match) {
+        if (!match.screenshot && sc.screenshot) match.screenshot = sc.screenshot;
+        if (!match.chartUrl && sc.chartUrl) match.chartUrl = sc.chartUrl;
+      } else {
+        combinedLocal.push(Object.assign({}, sc));
+      }
+    });
+
+    if (remoteCharts.length === 0) {
+      const hasUnsyncedLocal = combinedLocal.some(c => !c.chartUrl && c.screenshot);
+      return { charts: combinedLocal, hasUnsyncedLocal };
+    }
+
+    const matchedLocalSet = new Set();
+    const merged = remoteCharts.map((rc, idx) => {
+      const copy = Object.assign({}, rc);
+      let matchIdx = combinedLocal.findIndex(lc => copy.chartUrl && lc.chartUrl && lc.chartUrl === copy.chartUrl);
+      if (matchIdx === -1 && combinedLocal[idx] && (!combinedLocal[idx].chartUrl || !copy.chartUrl)) {
+        matchIdx = idx;
+      }
+
+      if (matchIdx >= 0) {
+        matchedLocalSet.add(matchIdx);
+        const localMatch = combinedLocal[matchIdx];
+        if (localMatch.screenshot && !copy.screenshot) {
+          copy.screenshot = localMatch.screenshot;
+        }
+        if (localMatch.label && (!copy.label || copy.label === `Chart ${idx + 1}` || (idx === 0 && copy.label === 'Entry / Setup' && localMatch.label !== 'Entry / Setup'))) {
+          copy.label = localMatch.label;
+        }
+        if (localMatch.id) copy.id = localMatch.id;
+      }
+      return copy;
+    });
+
+    const seenUrls = new Set(merged.map(c => c.chartUrl).filter(Boolean));
+    let hasUnsyncedLocal = false;
+
+    combinedLocal.forEach((lc, idx) => {
+      if (lc.screenshot && !lc.chartUrl && !matchedLocalSet.has(idx)) {
+        // Newly added locally and not yet written to Drive/Sheet
+        merged.push(Object.assign({}, lc));
+        hasUnsyncedLocal = true;
+      } else if (!remoteHasExplicitCharts && !matchedLocalSet.has(idx) && (!lc.chartUrl || !seenUrls.has(lc.chartUrl)) && (lc.screenshot || lc.chartUrl)) {
+        // Older single-chart Apps Script only returns index 0; preserve local charts 2+
+        merged.push(Object.assign({}, lc));
+      }
+    });
+
+    return { charts: merged, hasUnsyncedLocal };
+  }
+
   // Smart Two-Way Synchronizer (Pulls remote trades, merges, and updates UI)
   async function smartSync(options = { notify: true, silentIfEmpty: false }) {
     if (webhookUrl) {
@@ -292,24 +364,29 @@ const GoogleDriveSync = (function() {
             return new Date(b.date || 0) - new Date(a.date || 0);
           };
           const isOutOfOrder = list => list.some((t, i) => i > 0 && compareNewestFirst(list[i - 1], t) > 0);
+          const syncTradeFields = (typeof TradeApp !== 'undefined' && TradeApp.syncLegacyChartFields)
+            ? TradeApp.syncLegacyChartFields
+            : (t => t);
 
-          // Hydrate screenshots for all remote trades from local state or IndexedDB
+          let hasUnsyncedCharts = false;
+
+          // Hydrate & normalize charts for all remote trades from local state or IndexedDB
           for (const remoteTrade of remoteTrades) {
             const num = parseInt(remoteTrade.tradeNum, 10);
             const localTrade = localTrades.find(t => parseInt(t.tradeNum, 10) === num);
-            if (localTrade && localTrade.screenshot) {
-              remoteTrade.screenshot = localTrade.screenshot;
-              remoteTrade.hasScreenshot = true;
-            } else if (typeof TradeStorage !== 'undefined') {
-              const savedImg = await TradeStorage.getScreenshot(remoteTrade.id, num);
-              if (savedImg) {
-                remoteTrade.screenshot = savedImg;
-                remoteTrade.hasScreenshot = true;
-              }
-            }
-            if (remoteTrade.chartUrl) {
-              remoteTrade.hasScreenshot = true;
-            }
+            const dbCharts = (typeof TradeStorage !== 'undefined')
+              ? (TradeStorage.getTradeCharts
+                  ? await TradeStorage.getTradeCharts(localTrade ? localTrade.id : remoteTrade.id, num)
+                  : await (async () => {
+                      const img = await TradeStorage.getScreenshot(localTrade ? localTrade.id : remoteTrade.id, num);
+                      return img ? [{ id: 'ch_0', label: 'Entry / Setup', screenshot: img, chartUrl: '' }] : null;
+                    })())
+              : null;
+
+            const mergedChartsRes = mergeTradeCharts(remoteTrade, localTrade, dbCharts);
+            if (mergedChartsRes.hasUnsyncedLocal) hasUnsyncedCharts = true;
+            remoteTrade.charts = mergedChartsRes.charts;
+            syncTradeFields(remoteTrade);
           }
 
           if (remoteTrades.length === 0 && localTrades.length === 0) {
@@ -333,36 +410,16 @@ const GoogleDriveSync = (function() {
               showToast(`Backed up ${localTrades.length} trade(s) to your Google Sheet!`, 'success');
             }
           } else {
-            // Merge both sets by tradeNum PRESERVING chart screenshots & local attachments
+            // Merge both sets by tradeNum PRESERVING multi-chart screenshots & Drive links
             const mergedMap = new Map();
             localTrades.forEach(t => mergedMap.set(parseInt(t.tradeNum, 10), t));
             for (const remoteTrade of remoteTrades) {
               const num = parseInt(remoteTrade.tradeNum, 10);
               const localTrade = mergedMap.get(num);
               if (localTrade) {
-                if (localTrade.screenshot && !remoteTrade.screenshot) {
-                  remoteTrade.screenshot = localTrade.screenshot;
-                }
-                if (localTrade.hasScreenshot && !remoteTrade.hasScreenshot) {
-                  remoteTrade.hasScreenshot = localTrade.hasScreenshot;
-                }
-                if (localTrade.chartUrl && !remoteTrade.chartUrl) {
-                  remoteTrade.chartUrl = localTrade.chartUrl;
-                }
                 remoteTrade.id = localTrade.id || remoteTrade.id;
               }
-              if (remoteTrade.chartUrl) {
-                remoteTrade.hasScreenshot = true;
-              }
-              // If still no screenshot, check IndexedDB
-              if (!remoteTrade.screenshot && typeof TradeStorage !== 'undefined') {
-                const savedImg = await TradeStorage.getScreenshot(remoteTrade.id, num);
-                if (savedImg) {
-                  remoteTrade.screenshot = savedImg;
-                  remoteTrade.hasScreenshot = true;
-                }
-              }
-              mergedMap.set(num, remoteTrade);
+              mergedMap.set(num, syncTradeFields(remoteTrade));
             }
             const mergedList = Array.from(mergedMap.values()).sort(compareNewestFirst);
 
@@ -371,7 +428,7 @@ const GoogleDriveSync = (function() {
               showToast(`Synchronized ${mergedList.length} trade(s) with Google Sheet!`, 'success');
             }
 
-            if (mergedList.length > remoteTrades.length || (remoteTrades.length > 1 && isOutOfOrder(remoteTrades))) {
+            if (mergedList.length > remoteTrades.length || hasUnsyncedCharts || (remoteTrades.length > 1 && isOutOfOrder(remoteTrades))) {
               syncToGoogleSheetWebhook({ trades: mergedList });
             }
           }
@@ -420,19 +477,48 @@ const GoogleDriveSync = (function() {
     return smartSync({ notify: !silent, silentIfEmpty: silent });
   }
 
+  /** Prepare a lightweight copy of webhook payload: omit base64 for charts already uploaded to Drive. */
+  function buildWebhookPayload(payload) {
+    if (!payload || !Array.isArray(payload.trades)) return payload;
+    const normalize = (typeof TradeApp !== 'undefined' && TradeApp.normalizeTradeCharts)
+      ? TradeApp.normalizeTradeCharts
+      : (t => (t && Array.isArray(t.charts) ? t.charts : []));
+
+    const lightTrades = payload.trades.map(t => {
+      const charts = normalize(t).map(c => ({
+        id: c.id || '',
+        label: c.label || '',
+        chartUrl: c.chartUrl || '',
+        screenshot: c.chartUrl ? '' : (c.screenshot || ''),
+        addedAt: c.addedAt || ''
+      }));
+      const primary = charts[0] || {};
+      return Object.assign({}, t, {
+        charts,
+        chartUrl: primary.chartUrl || t.chartUrl || '',
+        chartUrls: charts.map(c => c.chartUrl).filter(Boolean),
+        screenshot: (primary.chartUrl || t.chartUrl) ? '' : (primary.screenshot || t.screenshot || ''),
+        hasScreenshot: charts.length > 0 || Boolean(t.hasScreenshot)
+      });
+    });
+
+    return Object.assign({}, payload, { trades: lightTrades });
+  }
+
   // Google Sheets Webhook Sync (Alternate zero-OAuth solution)
   async function syncToGoogleSheetWebhook(payload) {
     if (!webhookUrl) return;
 
     updateStatusUI('syncing', 'Syncing Sheet...');
     try {
+      const preparedPayload = buildWebhookPayload(payload);
       await fetch(webhookUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(preparedPayload),
       });
 
       const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -665,10 +751,15 @@ const GoogleDriveSync = (function() {
           return;
         }
 
-        // Save screenshots to IndexedDB if present
+        // Save screenshots / multi-charts to IndexedDB if present
         if (typeof TradeStorage !== 'undefined') {
           for (const t of importedTrades) {
-            if (t.screenshot) {
+            if (typeof TradeApp !== 'undefined' && TradeApp.syncLegacyChartFields) {
+              TradeApp.syncLegacyChartFields(t);
+            }
+            if (Array.isArray(t.charts) && t.charts.length > 0 && TradeStorage.saveTradeCharts) {
+              await TradeStorage.saveTradeCharts(t.id, t.charts, t.tradeNum);
+            } else if (t.screenshot) {
               await TradeStorage.saveScreenshot(t.id, t.screenshot, t.tradeNum);
             }
           }

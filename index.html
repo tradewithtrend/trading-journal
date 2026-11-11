@@ -875,46 +875,48 @@
           <input type="hidden" id="input-trade-emotion" value="Calm & Patient" />
         </div>
 
-        <!-- Row 6: COPY-PASTE SCREENSHOT DROPZONE (Direct Clipboard Ctrl+V Support) -->
-        <div class="space-y-1.5">
-          <label class="text-[11px] font-bold text-slate-400 uppercase flex items-center justify-between">
-            <span class="flex items-center space-x-1">
+        <!-- Row 6: MULTI-CHART SCREENSHOTS (Entry + Later / After-Market Follow-ups) -->
+        <div class="space-y-2">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <label class="text-[11px] font-bold text-slate-400 uppercase flex items-center space-x-1.5">
               <i data-lucide="camera" class="w-3.5 h-3.5 text-indigo-400"></i>
-              <span>Chart Screenshot</span>
-            </span>
-            <span class="text-[10px] text-indigo-400">Press Ctrl+V anywhere to paste</span>
-          </label>
+              <span>Chart Screenshots</span>
+              <span id="modal-charts-count" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/15 text-indigo-400">0</span>
+            </label>
+            <span class="text-[10px] text-indigo-400 font-medium">Paste Ctrl+V anywhere to add another chart</span>
+          </div>
 
-          <!-- Dropzone box -->
-          <div id="screenshot-dropzone" class="paste-dropzone p-4 text-center relative overflow-hidden group">
-            <input type="file" id="file-screenshot-input" accept="image/*" class="hidden" />
-            
-            <!-- Default placeholder state -->
+          <!-- Stage Label Preset for Next Added Chart -->
+          <div id="chart-stage-chips" class="flex flex-wrap items-center gap-1.5">
+            <span class="text-[10px] font-semibold text-slate-400 mr-0.5">Next chart tag:</span>
+            <button type="button" class="chip-btn chart-stage-chip active text-[11px] py-1 px-2.5" data-val="Entry / Setup">Entry / Setup</button>
+            <button type="button" class="chip-btn chart-stage-chip text-[11px] py-1 px-2.5" data-val="After / Follow-up">After / Follow-up</button>
+            <button type="button" class="chip-btn chart-stage-chip text-[11px] py-1 px-2.5" data-val="HTF Context">HTF Context</button>
+            <button type="button" class="chip-btn chart-stage-chip text-[11px] py-1 px-2.5" data-val="Exit">Exit</button>
+          </div>
+
+          <!-- Dropzone box (always ready to add more charts) -->
+          <div id="screenshot-dropzone" class="paste-dropzone p-3.5 text-center relative overflow-hidden group">
+            <input type="file" id="file-screenshot-input" accept="image/*" multiple class="hidden" />
+
             <div id="dropzone-empty-state" class="flex flex-col items-center justify-center space-y-1.5 py-2">
               <div class="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
                 <i data-lucide="clipboard-paste" class="w-5 h-5"></i>
               </div>
               <div class="text-xs font-semibold text-white">
-                <span class="text-indigo-400 font-bold">Paste screenshot (Ctrl + V)</span> or click to upload
+                <span class="text-indigo-400 font-bold">Paste screenshot (Ctrl + V)</span> or click / drop images
               </div>
-              <p class="text-[10px] text-slate-500">Auto-compressed and stored directly in your Google Drive record</p>
+              <p class="text-[10px] text-slate-500">Add entry chart now and follow-up market charts later (supports multiple)</p>
             </div>
 
-            <!-- Preview state when image is pasted -->
-            <div id="dropzone-preview-state" class="hidden flex-col items-center justify-center relative">
-              <img id="screenshot-preview-img" src="" alt="Screenshot" class="max-h-48 rounded-lg object-contain border border-slate-700 bg-black/60 shadow-lg" />
-              <div class="mt-2 flex items-center space-x-3">
-                <button type="button" id="btn-view-screenshot-fullscreen" class="px-2.5 py-1 rounded-lg text-xs bg-slate-800 hover:bg-slate-700 text-white flex items-center space-x-1">
-                  <i data-lucide="maximize-2" class="w-3 h-3"></i>
-                  <span>Fullscreen</span>
-                </button>
-                <button type="button" id="btn-remove-screenshot" class="px-2.5 py-1 rounded-lg text-xs bg-rose-950/80 hover:bg-rose-900 text-rose-300 flex items-center space-x-1">
-                  <i data-lucide="trash-2" class="w-3 h-3"></i>
-                  <span>Remove</span>
-                </button>
-              </div>
+            <div id="dropzone-add-more-state" class="hidden items-center justify-center gap-2 py-1 text-xs font-semibold text-slate-300">
+              <i data-lucide="plus-circle" class="w-4 h-4 text-indigo-400 shrink-0"></i>
+              <span><strong class="text-indigo-400">Paste (Ctrl+V)</strong> or click / drop to add another chart (<span id="dropzone-next-label" class="text-emerald-400">After / Follow-up</span>)</span>
             </div>
           </div>
+
+          <!-- Attached Charts Gallery Grid -->
+          <div id="modal-charts-list" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1"></div>
         </div>
 
         <!-- Row 7: 1 Key Lesson / Execution Review (1 line) -->
@@ -941,20 +943,46 @@
     </div>
   </div>
 
-  <!-- MODAL: IMAGE LIGHTBOX (FULLSCREEN SCREENSHOT PREVIEW) -->
-  <div id="modal-lightbox" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-md hidden items-center justify-center p-4">
+  <!-- MODAL: IMAGE LIGHTBOX (MULTI-CHART FULLSCREEN GALLERY) -->
+  <div id="modal-lightbox" class="fixed inset-0 z-50 bg-black/92 backdrop-blur-md hidden items-center justify-center p-3 sm:p-4">
     <div class="relative max-w-5xl w-full flex flex-col items-center">
-      <div class="w-full flex items-center justify-between pb-2">
-        <a id="lightbox-drive-link" href="#" target="_blank" class="hidden text-xs text-sky-400 hover:text-sky-300 hover:underline flex items-center space-x-1 font-semibold">
-          <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
-          <span>Open Full Chart in Google Drive ↗</span>
-        </a>
-        <button id="btn-close-lightbox" class="ml-auto text-slate-400 hover:text-white transition">
-          <i data-lucide="x" class="w-7 h-7"></i>
+      <div class="w-full flex flex-wrap items-center justify-between gap-2 pb-2.5">
+        <div class="flex items-center space-x-2.5">
+          <span id="lightbox-counter" class="hidden px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-600 text-white">1 / 1</span>
+          <a id="lightbox-drive-link" href="#" target="_blank" rel="noopener noreferrer" class="hidden text-xs text-sky-400 hover:text-sky-300 hover:underline flex items-center space-x-1 font-semibold">
+            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+            <span>Open in Google Drive ↗</span>
+          </a>
+        </div>
+        <div class="flex items-center space-x-2 ml-auto">
+          <div id="lightbox-header-nav" class="hidden items-center space-x-1">
+            <button type="button" id="btn-lightbox-prev" class="lightbox-nav-btn px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800/90 hover:bg-slate-700 border border-slate-700 transition flex items-center space-x-1" title="Previous chart (Left Arrow)">
+              <i data-lucide="chevron-left" class="w-4 h-4"></i>
+              <span class="hidden sm:inline">Prev</span>
+            </button>
+            <button type="button" id="btn-lightbox-next" class="lightbox-nav-btn px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800/90 hover:bg-slate-700 border border-slate-700 transition flex items-center space-x-1" title="Next chart (Right Arrow)">
+              <span class="hidden sm:inline">Next</span>
+              <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+          </div>
+          <button type="button" id="btn-close-lightbox" class="lightbox-close-btn p-1 text-slate-300 hover:text-white transition" title="Close (Esc)">
+            <i data-lucide="x" class="w-7 h-7"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="relative w-full flex items-center justify-center">
+        <button type="button" id="btn-lightbox-prev-overlay" class="hidden lightbox-nav-btn absolute left-2 z-10 p-2 rounded-full bg-black/65 hover:bg-indigo-600/90 border border-white/15 backdrop-blur-sm transition" title="Previous chart">
+          <i data-lucide="chevron-left" class="w-5 h-5"></i>
+        </button>
+        <img id="lightbox-img" src="" alt="Trade Chart" class="max-h-[72vh] max-w-full rounded-xl object-contain shadow-2xl border border-slate-800" />
+        <button type="button" id="btn-lightbox-next-overlay" class="hidden lightbox-nav-btn absolute right-2 z-10 p-2 rounded-full bg-black/65 hover:bg-indigo-600/90 border border-white/15 backdrop-blur-sm transition" title="Next chart">
+          <i data-lucide="chevron-right" class="w-5 h-5"></i>
         </button>
       </div>
-      <img id="lightbox-img" src="" alt="Trade Chart" class="max-h-[82vh] max-w-full rounded-xl object-contain shadow-2xl border border-slate-800" />
-      <div id="lightbox-caption" class="mt-3 text-xs text-slate-300 font-semibold text-center"></div>
+
+      <div id="lightbox-caption" class="mt-2.5 text-xs font-semibold text-center"></div>
+      <div id="lightbox-thumbs" class="hidden flex items-center gap-2 overflow-x-auto max-w-full pt-3 pb-1 px-1"></div>
     </div>
   </div>
 
