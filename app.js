@@ -1240,6 +1240,29 @@ const TradeApp = (function() {
       : { month: 'short', day: 'numeric' });
   }
 
+  function formatCleanCurrencyTick(value) {
+    const num = Number(value) || 0;
+    if (Math.abs(num) < 1e-9) return '$0';
+    if (Math.abs(num) < 0.01) {
+      const tiny = Math.round(num * 10000) / 10000;
+      const tinyStr = Math.abs(tiny).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+      return `${tiny < 0 ? '-$' : '$'}${tinyStr}`;
+    }
+    const rounded = Math.round(num * 100) / 100;
+    const hasFraction = Math.abs(rounded % 1) > 1e-6;
+    const absStr = Math.abs(rounded).toLocaleString('en-US', {
+      minimumFractionDigits: hasFraction ? 2 : 0,
+      maximumFractionDigits: 2
+    });
+    return `${rounded < 0 ? '-$' : '$'}${absStr}`;
+  }
+
+  function formatCleanRTick(value) {
+    const num = Number(value) || 0;
+    const rounded = Math.abs(num) < 1e-9 ? 0 : Math.round(num * 100) / 100;
+    return `${rounded}R`;
+  }
+
   function getChartTheme() {
     const isDark = document.documentElement.classList.contains('dark');
     return {
@@ -1537,7 +1560,7 @@ const TradeApp = (function() {
           maxBarThickness: 42
         }]
       },
-      plugins: [createHorizontalLimitPlugin(limitVal, '#EF4444', stats.lossLimit > 0 ? `Max Loss: -$${stats.lossLimit}` : '')],
+      plugins: [createHorizontalLimitPlugin(limitVal, '#EF4444', stats.lossLimit > 0 ? `Max Loss: ${formatCleanCurrencyTick(-stats.lossLimit)}` : '')],
       options: {
         responsive: true,
         maintainAspectRatio: false,
@@ -1569,7 +1592,7 @@ const TradeApp = (function() {
             ticks: {
               color: theme.tickColor,
               font: { size: 10 },
-              callback: value => `${value >= 0 ? '$' : '-$'}${Math.abs(value)}`
+              callback: formatCleanCurrencyTick
             }
           }
         }
@@ -1774,9 +1797,11 @@ const TradeApp = (function() {
             borderWidth: 1,
             callbacks: {
               label: function(context) {
+                const y = context.parsed.y || 0;
+                const cleanY = Math.round(y * 100) / 100;
                 return chartMode === 'r'
-                  ? `Cumulative: ${context.parsed.y >= 0 ? '+' : ''}${context.parsed.y.toFixed(2)}R`
-                  : `Cumulative: ${context.parsed.y >= 0 ? '+$' : '-$'}${Math.abs(context.parsed.y).toLocaleString()}`;
+                  ? `Cumulative: ${cleanY >= 0 ? '+' : ''}${cleanY.toFixed(2)}R`
+                  : `Cumulative: ${cleanY >= 0 ? '+$' : '-$'}${Math.abs(cleanY).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
               }
             }
           }
@@ -1789,7 +1814,7 @@ const TradeApp = (function() {
               color: tickColor,
               font: { size: 10 },
               callback: function(value) {
-                return chartMode === 'r' ? `${value}R` : `$${value}`;
+                return chartMode === 'r' ? formatCleanRTick(value) : formatCleanCurrencyTick(value);
               }
             }
           }
@@ -1836,7 +1861,7 @@ const TradeApp = (function() {
         maintainAspectRatio: false,
         plugins: { legend: { display: false } },
         scales: {
-          x: { grid: { color: gridColor }, ticks: { color: '#64748B', font: { size: 9 } } },
+          x: { grid: { color: gridColor }, ticks: { color: '#64748B', font: { size: 9 }, callback: formatCleanCurrencyTick } },
           y: { grid: { display: false }, ticks: { color: tickColor, font: { size: 10 } } }
         }
       }
@@ -1880,7 +1905,7 @@ const TradeApp = (function() {
         plugins: { legend: { display: false } },
         scales: {
           x: { grid: { display: false }, ticks: { color: tickColor, font: { size: 10 } } },
-          y: { grid: { color: gridColor }, ticks: { color: '#64748B', font: { size: 9 } } }
+          y: { grid: { color: gridColor }, ticks: { color: '#64748B', font: { size: 9 }, callback: formatCleanCurrencyTick } }
         }
       }
     });
