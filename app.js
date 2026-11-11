@@ -959,7 +959,7 @@ const TradeApp = (function() {
     // Card 2: Net PnL
     const netPnLEl = document.getElementById('kpi-net-pnl');
     const returnEl = document.getElementById('kpi-net-return');
-    const formattedPnL = (stats.netPnL >= 0 ? '+$' : '-$') + Math.abs(stats.netPnL).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const formattedPnL = formatSignedCurrency(stats.netPnL, { zeroText: '+$0.00' });
     netPnLEl.textContent = formattedPnL;
     netPnLEl.className = `text-2xl font-black ${stats.netPnL > 0 ? 'text-tradeGreen' : stats.netPnL < 0 ? 'text-tradeRed' : 'text-slate-200'}`;
 
@@ -982,7 +982,7 @@ const TradeApp = (function() {
 
     // Card 5: Cost of Broken Rules (Highlighting rule breaking leak!)
     const costBrokenEl = document.getElementById('kpi-cost-broken');
-    costBrokenEl.textContent = stats.costOfBrokenRules > 0 ? `-$${Math.round(stats.costOfBrokenRules).toLocaleString()}` : '$0.00';
+    costBrokenEl.textContent = formatSignedCurrency(stats.costOfBrokenRules, { forceNegative: true, zeroText: '$0.00' });
     costBrokenEl.className = `text-2xl font-black ${stats.costOfBrokenRules > 0 ? 'text-rose-400' : 'text-slate-400'}`;
     
     const topMistakeEl = document.getElementById('kpi-top-mistake');
@@ -991,7 +991,7 @@ const TradeApp = (function() {
 
     // Card 6: Missed Trades
     document.getElementById('kpi-missed-count').textContent = stats.missedTradesCount;
-    document.getElementById('kpi-missed-pnl').textContent = (stats.missedTradesPotentialPnL >= 0 ? '+$' : '-$') + Math.abs(Math.round(stats.missedTradesPotentialPnL)).toLocaleString();
+    document.getElementById('kpi-missed-pnl').textContent = formatSignedCurrency(stats.missedTradesPotentialPnL, { zeroText: '+$0.00' });
 
     // Roadmap milestone badges
     updateMilestoneBadges(count);
@@ -1238,6 +1238,26 @@ const TradeApp = (function() {
     return localDate.toLocaleDateString('en-US', includeYear
       ? { month: 'short', day: 'numeric', year: 'numeric' }
       : { month: 'short', day: 'numeric' });
+  }
+
+  function formatSignedCurrency(value, { forceNegative = false, zeroText = '$0.00' } = {}) {
+    const num = Number(value) || 0;
+    if (Math.abs(num) < 1e-9) return zeroText;
+    const abs = Math.abs(num);
+    const maxDigits = abs < 0.01 ? 4 : 2;
+    const factor = Math.pow(10, maxDigits);
+    const roundedAbs = Math.round(abs * factor) / factor;
+    if (roundedAbs === 0) return zeroText;
+    const absStr = roundedAbs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: maxDigits });
+    const sign = (forceNegative || num < 0) ? '-$' : '+$';
+    return `${sign}${absStr}`;
+  }
+
+  function roundPnLValue(value) {
+    const num = Number(value) || 0;
+    if (Math.abs(num) < 1e-9) return 0;
+    const factor = Math.abs(num) < 0.01 ? 10000 : 100;
+    return Math.round(num * factor) / factor;
   }
 
   function formatCleanCurrencyTick(value) {
@@ -1841,7 +1861,7 @@ const TradeApp = (function() {
     });
 
     const labels = Object.keys(stratMap).slice(0, 6);
-    const data = labels.map(l => Math.round(stratMap[l]));
+    const data = labels.map(l => roundPnLValue(stratMap[l]));
     const colors = data.map(val => val >= 0 ? '#10B981' : '#EF4444');
 
     strategyChart = new Chart(ctx, {
@@ -1894,7 +1914,7 @@ const TradeApp = (function() {
         labels: ['Rules Followed', 'Rules Broken ⚠️'],
         datasets: [{
           label: 'Total P&L ($)',
-          data: [Math.round(planYesPnL), Math.round(planNoPnL)],
+          data: [roundPnLValue(planYesPnL), roundPnLValue(planNoPnL)],
           backgroundColor: [planYesPnL >= 0 ? '#10B981' : '#EF4444', '#EF4444'],
           borderRadius: 6
         }]
