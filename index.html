@@ -431,6 +431,143 @@
         </div>
       </div>
 
+      <!-- Daily Loss Limit & Daily Trade Limit Analytics Panel -->
+      <div class="bg-cardBg border border-borderSubtle rounded-2xl p-5 shadow-sm space-y-5">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between pb-4 border-b border-borderSubtle gap-4">
+          <div>
+            <h2 class="text-base font-bold text-white flex items-center space-x-2">
+              <i data-lucide="shield-check" class="w-5 h-5 text-indigo-400"></i>
+              <span>Daily Loss Limit &amp; Daily Trade Limit</span>
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">Track daily capital protection rules and prevent overtrading across every session</p>
+          </div>
+
+          <!-- Inline Daily Limits Configuration -->
+          <div class="flex flex-wrap items-end gap-2.5 text-xs">
+            <div>
+              <label for="analytics-daily-loss-limit" class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Daily Loss Limit ($)</label>
+              <input id="analytics-daily-loss-limit" type="number" min="0" step="any" placeholder="100" class="w-28 sm:w-32 bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+            <div>
+              <label for="analytics-daily-trade-limit" class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Daily Trade Limit</label>
+              <input id="analytics-daily-trade-limit" type="number" min="0" step="1" placeholder="3" class="w-24 sm:w-28 bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+            <button type="button" id="btn-save-daily-limits" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition">
+              Save Limits
+            </button>
+          </div>
+        </div>
+
+        <!-- Daily Limits Status Cards (4-card summary) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          <!-- Card 1: Today's Loss vs Limit -->
+          <div class="p-4 rounded-xl bg-slate-900/60 border border-borderSubtle space-y-2">
+            <div class="flex items-center justify-between text-[11px] font-semibold text-slate-400">
+              <span>Today's Loss Used</span>
+              <span id="dl-today-loss-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400">Safe</span>
+            </div>
+            <div class="flex items-baseline justify-between">
+              <span id="dl-today-loss-value" class="text-lg font-black text-white">$0.00</span>
+              <span id="dl-today-loss-cap" class="text-xs text-slate-400">/ $100 max</span>
+            </div>
+            <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+              <div id="dl-today-loss-bar" class="bg-emerald-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <div id="dl-today-loss-sub" class="text-[11px] text-slate-400">$100.00 buffer left today</div>
+          </div>
+
+          <!-- Card 2: Today's Trades vs Limit -->
+          <div class="p-4 rounded-xl bg-slate-900/60 border border-borderSubtle space-y-2">
+            <div class="flex items-center justify-between text-[11px] font-semibold text-slate-400">
+              <span>Today's Trade Count</span>
+              <span id="dl-today-trades-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400">Safe</span>
+            </div>
+            <div class="flex items-baseline justify-between">
+              <span id="dl-today-trades-value" class="text-lg font-black text-white">0</span>
+              <span id="dl-today-trades-cap" class="text-xs text-slate-400">/ 3 max</span>
+            </div>
+            <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+              <div id="dl-today-trades-bar" class="bg-indigo-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <div id="dl-today-trades-sub" class="text-[11px] text-slate-400">3 trades left today</div>
+          </div>
+
+          <!-- Card 3: Loss Limit Discipline Across Days -->
+          <div class="p-4 rounded-xl bg-slate-900/60 border border-borderSubtle space-y-2">
+            <div class="flex items-center justify-between text-[11px] font-semibold text-slate-400">
+              <span>Loss Limit Compliance</span>
+              <i data-lucide="shield" class="w-3.5 h-3.5 text-emerald-400"></i>
+            </div>
+            <div id="dl-loss-compliance-pct" class="text-lg font-black text-emerald-400">100%</div>
+            <div id="dl-loss-compliance-sub" class="text-[11px] text-slate-400">0 of 0 trading days breached</div>
+            <div id="dl-worst-day-sub" class="text-[11px] text-slate-400">Worst day: $0.00</div>
+          </div>
+
+          <!-- Card 4: Trade Limit Discipline Across Days -->
+          <div class="p-4 rounded-xl bg-slate-900/60 border border-borderSubtle space-y-2">
+            <div class="flex items-center justify-between text-[11px] font-semibold text-slate-400">
+              <span>Trade Cap Compliance</span>
+              <i data-lucide="activity" class="w-3.5 h-3.5 text-indigo-400"></i>
+            </div>
+            <div id="dl-trades-compliance-pct" class="text-lg font-black text-indigo-400">100%</div>
+            <div id="dl-trades-compliance-sub" class="text-[11px] text-slate-400">0 over-trading days</div>
+            <div id="dl-peak-trades-sub" class="text-[11px] text-slate-400">Peak day: 0 trades</div>
+          </div>
+        </div>
+
+        <!-- Daily Charts Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div class="p-4 rounded-xl bg-slate-900/40 border border-borderSubtle">
+            <div class="flex items-center justify-between mb-1">
+              <h3 class="text-xs font-bold text-white flex items-center space-x-1.5">
+                <i data-lucide="bar-chart-3" class="w-4 h-4 text-rose-400"></i>
+                <span>Daily P&amp;L vs Daily Loss Limit ($)</span>
+              </h3>
+              <span class="text-[10px] text-slate-400">Dashed line = max daily loss</span>
+            </div>
+            <div class="h-60 pt-2">
+              <canvas id="daily-loss-chart"></canvas>
+            </div>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-900/40 border border-borderSubtle">
+            <div class="flex items-center justify-between mb-1">
+              <h3 class="text-xs font-bold text-white flex items-center space-x-1.5">
+                <i data-lucide="hash" class="w-4 h-4 text-indigo-400"></i>
+                <span>Daily Executed Trades vs Trade Limit</span>
+              </h3>
+              <span class="text-[10px] text-slate-400">Dashed line = max trades/day</span>
+            </div>
+            <div class="h-60 pt-2">
+              <canvas id="daily-trades-chart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Trading Days Limit Log -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-xs font-bold text-white uppercase tracking-wider">Daily Session Limit History</h3>
+            <span class="text-[11px] text-slate-400">Most recent day on top</span>
+          </div>
+          <div class="overflow-x-auto rounded-xl border border-borderSubtle">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="border-b border-borderSubtle bg-slate-900/60 text-slate-400 uppercase text-[10px]">
+                  <th class="py-2.5 px-3 font-semibold">Date</th>
+                  <th class="py-2.5 px-3 font-semibold text-center">Trades / Cap</th>
+                  <th class="py-2.5 px-3 font-semibold text-right">Daily P&amp;L ($)</th>
+                  <th class="py-2.5 px-3 font-semibold text-right">Daily R</th>
+                  <th class="py-2.5 px-3 font-semibold text-center">Loss Limit</th>
+                  <th class="py-2.5 px-3 font-semibold text-center">Trade Limit</th>
+                </tr>
+              </thead>
+              <tbody id="daily-limits-tbody" class="divide-y divide-borderSubtle"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <!-- Breakdown Grid -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         <!-- Setup / Strategy Performance -->
@@ -694,6 +831,10 @@
 
       <!-- Modal Form -->
       <form id="form-trade" class="p-5 space-y-4 max-h-[82vh] overflow-y-auto">
+        <div id="modal-daily-limit-warning" class="hidden rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-400 font-semibold flex items-start space-x-2">
+          <i data-lucide="alert-triangle" class="w-4 h-4 shrink-0 mt-0.5"></i>
+          <span id="modal-daily-limit-warning-text"></span>
+        </div>
         <input type="hidden" id="trade-id" />
         <input type="hidden" id="trade-is-missed" value="false" />
         <input type="hidden" id="trade-screenshot-data" value="" />
@@ -1000,10 +1141,22 @@
       </div>
       <div class="p-6 space-y-6 max-h-[75vh] overflow-y-auto text-xs">
         <div class="space-y-3 pb-4 border-b border-borderSubtle">
-          <h4 class="font-bold text-white uppercase text-xs tracking-wider">Account Starting Capital</h4>
+          <h4 class="font-bold text-white uppercase text-xs tracking-wider">Account &amp; Daily Risk Limits</h4>
           <div>
             <label class="block text-slate-400 mb-1">Starting Account Balance ($)</label>
             <input id="setting-initial-balance" type="number" step="any" value="10000" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white" />
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div>
+              <label for="setting-daily-loss-limit" class="block text-slate-400 mb-1">Daily Loss Limit ($)</label>
+              <input id="setting-daily-loss-limit" type="number" min="0" step="any" value="100" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white" />
+              <p class="text-[10px] text-slate-500 mt-1">Set 0 to disable limit</p>
+            </div>
+            <div>
+              <label for="setting-daily-trade-limit" class="block text-slate-400 mb-1">Daily Trade Limit (Trades/Day)</label>
+              <input id="setting-daily-trade-limit" type="number" min="0" step="1" value="3" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white" />
+              <p class="text-[10px] text-slate-500 mt-1">Max executed trades per day</p>
+            </div>
           </div>
         </div>
 

@@ -224,6 +224,8 @@ const TradeApp = (function() {
   let settings = {
     initialBalance: 10000,
     maxRiskPct: 1.0,
+    dailyLossLimit: 100,
+    dailyTradeLimit: 3,
   };
 
   // Active filter state
@@ -318,6 +320,8 @@ const TradeApp = (function() {
   let strategyChart = null;
   let disciplineChart = null;
   let marketChart = null;
+  let dailyLossChart = null;
+  let dailyTradesChart = null;
 
   // Initialize
   async function init() {
@@ -491,6 +495,24 @@ const TradeApp = (function() {
     applyTheme(nextTheme, true);
   }
 
+  function parseNonNegLimit(rawVal, fallback) {
+    const parsed = parseFloat(rawVal);
+    return (!isNaN(parsed) && parsed >= 0) ? parsed : fallback;
+  }
+
+  function syncLimitInputs() {
+    const lossVal = parseNonNegLimit(settings.dailyLossLimit, 100);
+    const tradeVal = Math.floor(parseNonNegLimit(settings.dailyTradeLimit, 3));
+    ['setting-daily-loss-limit', 'analytics-daily-loss-limit'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = lossVal;
+    });
+    ['setting-daily-trade-limit', 'analytics-daily-trade-limit'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = tradeVal;
+    });
+  }
+
   function loadSettings() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_SETTINGS);
@@ -499,17 +521,26 @@ const TradeApp = (function() {
       }
       const balanceInput = document.getElementById('setting-initial-balance');
       if (balanceInput) balanceInput.value = settings.initialBalance;
+      syncLimitInputs();
     } catch (e) {
       console.warn('Could not load settings:', e);
     }
   }
 
-  function saveSettings() {
+  function saveSettings(source = 'settings') {
     const balanceInput = document.getElementById('setting-initial-balance');
     if (balanceInput) settings.initialBalance = parseFloat(balanceInput.value) || 10000;
+
+    const lossEl = document.getElementById(source === 'analytics' ? 'analytics-daily-loss-limit' : 'setting-daily-loss-limit');
+    const tradeEl = document.getElementById(source === 'analytics' ? 'analytics-daily-trade-limit' : 'setting-daily-trade-limit');
+    if (lossEl) settings.dailyLossLimit = parseNonNegLimit(lossEl.value, settings.dailyLossLimit ?? 100);
+    if (tradeEl) settings.dailyTradeLimit = Math.floor(parseNonNegLimit(tradeEl.value, settings.dailyTradeLimit ?? 3));
+
+    syncLimitInputs();
     localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
-    GoogleDriveSync.showToast('Settings saved', 'success');
+    GoogleDriveSync.showToast('Settings & daily limits saved', 'success');
     renderKPIs();
+    renderCharts();
   }
 
   async function loadTrades() {
@@ -1018,12 +1049,493 @@ const TradeApp = (function() {
     lucide.createIcons();
   }
 
+  function formatLocalYMD(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function getLocalDateKey(dateInput) {
+    if (!dateInput) return formatLocalYMD(new Date());
+    const d = new Date(dateInput);
+    if (!isNaN(d.getTime())) return formatLocalYMD(d);
+    const str = String(dateInput).trim();
+    return /^\d{4}-\d{2}-\d{2}/.test(str) ? str.slice(0, 10) : formatLocalYMD(new Date());
+  }
+
+  function formatShortDayLabel(ymd, includeYear = false) {
+    const parts = String(ymd || '').split('-').map(Number);
+    if (parts.length !== 3 || parts.some(isNaN)) return ymd || '-';
+    const localDate = new Date(parts[0], parts[1] - 1, parts[2]);
+    return localDate.toLocaleDateString('en-US', includeYear
+      ? { month: 'short', day: 'numeric', year: 'numeric' }
+      : { month: 'short', day: 'numeric' });
+  }
+
+  function getChartTheme() {
+    const isDark = document.documentElement.classList.contains('dark');
+    return {
+      isDark,
+      gridColor: isDark ? '#1E293B' : '#E2E8F0',
+      tickColor: isDark ? '#94A3B8' : '#475569',
+      tooltipBg: isDark ? '#0F172A' : '#FFFFFF',
+      tooltipTitle: isDark ? '#F8FAFC' : '#0F172A',
+      tooltipBody: isDark ? '#94A3B8' : '#334155',
+      tooltipBorder: isDark ? '#334155' : '#CBD5E1'
+    };
+  }
+
+  /** Draw a full-width dashed limit reference line across any Chart.js bar/line plot. */
+  function createHorizontalLimitPlugin(limitValue, color, labelText) {
+    return {
+      id: 'horizontalLimitLine',
+      afterDatasetsDraw(chart) {
+        if (limitValue === null || limitValue === undefined || isNaN(limitValue)) return;
+        const { ctx, chartArea, scales } = chart;
+        if (!chartArea || !scales || !scales.y) return;
+        const yPos = scales.y.getPixelForValue(limitValue);
+        if (yPos < chartArea.top - 4 || yPos > chartArea.bottom + 4) return;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.75;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(chartArea.left, yPos);
+        ctx.lineTo(chartArea.right, yPos);
+        ctx.stroke();
+        if (labelText) {
+          ctx.fillStyle = color;
+          ctx.font = 'bold 10px sans-serif';
+          ctx.textAlign = 'right';
+          const textY = Math.max(chartArea.top + 11, yPos - 5);
+          ctx.fillText(labelText, chartArea.right - 4, textY);
+        }
+        ctx.restore();
+      }
+    };
+  }
+
+  /** Aggregate executed trades per local calendar day and evaluate Daily Loss & Daily Trade Limits. */
+  function computeDailyStats(tradeList = trades) {
+    const lossLimit = parseNonNegLimit(settings.dailyLossLimit, 100);
+    const tradeLimit = Math.floor(parseNonNegLimit(settings.dailyTradeLimit, 3));
+    const dayMap = new Map();
+
+    tradeList.filter(t => !t.isMissed).forEach(t => {
+      const dateKey = getLocalDateKey(t.date);
+      if (!dayMap.has(dateKey)) {
+        dayMap.set(dateKey, { dateKey, tradeCount: 0, netPnL: 0, netR: 0 });
+      }
+      const entry = dayMap.get(dateKey);
+      entry.tradeCount += 1;
+      entry.netPnL += parseFloat(t.realizedPnL) || 0;
+      entry.netR += parseFloat(t.realizedR) || 0;
+    });
+
+    const days = Array.from(dayMap.values())
+      .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
+      .map(d => {
+        const netPnL = Math.round(d.netPnL * 100) / 100;
+        const netR = Math.round(d.netR * 100) / 100;
+        const dailyLoss = Math.round(Math.max(0, -netPnL) * 100) / 100;
+        return {
+          dateKey: d.dateKey,
+          tradeCount: d.tradeCount,
+          netPnL,
+          netR,
+          dailyLoss,
+          lossHit: lossLimit > 0 && dailyLoss >= lossLimit,
+          lossBreached: lossLimit > 0 && dailyLoss > lossLimit,
+          tradesHit: tradeLimit > 0 && d.tradeCount >= tradeLimit,
+          tradesBreached: tradeLimit > 0 && d.tradeCount > tradeLimit
+        };
+      });
+
+    const todayKey = formatLocalYMD(new Date());
+    const today = days.find(d => d.dateKey === todayKey) || {
+      dateKey: todayKey,
+      tradeCount: 0,
+      netPnL: 0,
+      netR: 0,
+      dailyLoss: 0,
+      lossHit: false,
+      lossBreached: false,
+      tradesHit: false,
+      tradesBreached: false
+    };
+
+    const totalDays = days.length;
+    const breachedLossDays = lossLimit > 0 ? days.filter(d => d.lossBreached).length : 0;
+    const breachedTradeDays = tradeLimit > 0 ? days.filter(d => d.tradesBreached).length : 0;
+    const withinLossDays = totalDays - breachedLossDays;
+    const withinTradeDays = totalDays - breachedTradeDays;
+    const worstDayLoss = days.reduce((max, d) => Math.max(max, d.dailyLoss), 0);
+    const peakDayTrades = days.reduce((max, d) => Math.max(max, d.tradeCount), 0);
+
+    return {
+      days,
+      today,
+      lossLimit,
+      tradeLimit,
+      totalDays,
+      breachedLossDays,
+      withinLossDays,
+      breachedTradeDays,
+      withinTradeDays,
+      worstDayLoss,
+      peakDayTrades
+    };
+  }
+
   // Render Charts in Analytics Tab
   function renderCharts() {
     renderEquityCurve();
+    renderDailyLimitsAnalytics();
     renderStrategyChart();
     renderDisciplineChart();
     renderPsychologyChart();
+  }
+
+  function renderDailyLimitsAnalytics() {
+    syncLimitInputs();
+    const stats = computeDailyStats();
+    const { today, lossLimit, tradeLimit, totalDays, breachedLossDays, withinLossDays, breachedTradeDays, withinTradeDays, worstDayLoss, peakDayTrades } = stats;
+
+    // 1. Today's Loss Used vs Limit Card
+    const lossValEl = document.getElementById('dl-today-loss-value');
+    const lossCapEl = document.getElementById('dl-today-loss-cap');
+    const lossBadgeEl = document.getElementById('dl-today-loss-badge');
+    const lossBarEl = document.getElementById('dl-today-loss-bar');
+    const lossSubEl = document.getElementById('dl-today-loss-sub');
+
+    if (lossValEl) {
+      lossValEl.textContent = today.dailyLoss > 0 ? `-$${today.dailyLoss.toFixed(2)}` : `$0.00`;
+      lossValEl.className = `text-lg font-black ${today.lossHit ? 'text-rose-500' : (today.dailyLoss > 0 ? 'text-amber-500' : 'text-emerald-500')}`;
+    }
+    if (lossCapEl) lossCapEl.textContent = lossLimit > 0 ? `/ -$${lossLimit.toLocaleString()} max` : 'Disabled';
+
+    const lossPct = lossLimit > 0 ? Math.min(100, (today.dailyLoss / lossLimit) * 100) : 0;
+    if (lossBarEl) {
+      lossBarEl.style.width = `${lossPct}%`;
+      lossBarEl.className = `h-1.5 rounded-full transition-all duration-300 ${
+        lossLimit <= 0 ? 'bg-slate-500' :
+        today.dailyLoss >= lossLimit ? 'bg-rose-500' :
+        lossPct >= 75 ? 'bg-amber-500' : 'bg-emerald-500'
+      }`;
+    }
+    if (lossBadgeEl) {
+      let badgeTxt = 'Safe';
+      let badgeCls = 'bg-emerald-500/15 text-emerald-500';
+      if (lossLimit <= 0) {
+        badgeTxt = 'Off';
+        badgeCls = 'bg-slate-500/15 text-slate-400';
+      } else if (today.lossBreached) {
+        badgeTxt = 'Breached';
+        badgeCls = 'bg-rose-500/15 text-rose-500';
+      } else if (today.lossHit) {
+        badgeTxt = 'Limit Hit';
+        badgeCls = 'bg-rose-500/15 text-rose-500';
+      } else if (lossPct >= 75) {
+        badgeTxt = 'Near Limit';
+        badgeCls = 'bg-amber-500/15 text-amber-500';
+      }
+      lossBadgeEl.textContent = badgeTxt;
+      lossBadgeEl.className = `px-2 py-0.5 rounded-full text-[10px] font-bold ${badgeCls}`;
+    }
+    if (lossSubEl) {
+      if (lossLimit <= 0) {
+        lossSubEl.textContent = today.netPnL >= 0 ? `+$${today.netPnL.toFixed(2)} net today` : `-$${today.dailyLoss.toFixed(2)} net today`;
+      } else if (today.lossBreached) {
+        lossSubEl.textContent = `Exceeded by $${(today.dailyLoss - lossLimit).toFixed(2)} — stop trading`;
+      } else if (today.lossHit) {
+        lossSubEl.textContent = '0 buffer left — respect your daily stop';
+      } else {
+        const bufferLeft = (lossLimit - today.dailyLoss).toFixed(2);
+        lossSubEl.textContent = today.netPnL > 0
+          ? `+$${today.netPnL.toFixed(2)} net today • $${lossLimit.toFixed(2)} limit intact`
+          : `$${bufferLeft} loss buffer remaining today`;
+      }
+    }
+
+    // 2. Today's Trade Count vs Limit Card
+    const trValEl = document.getElementById('dl-today-trades-value');
+    const trCapEl = document.getElementById('dl-today-trades-cap');
+    const trBadgeEl = document.getElementById('dl-today-trades-badge');
+    const trBarEl = document.getElementById('dl-today-trades-bar');
+    const trSubEl = document.getElementById('dl-today-trades-sub');
+
+    if (trValEl) {
+      trValEl.textContent = String(today.tradeCount);
+      trValEl.className = `text-lg font-black ${today.tradesBreached ? 'text-rose-500' : (today.tradesHit ? 'text-amber-500' : 'text-white')}`;
+    }
+    if (trCapEl) trCapEl.textContent = tradeLimit > 0 ? `/ ${tradeLimit} max` : 'Disabled';
+
+    const trPct = tradeLimit > 0 ? Math.min(100, (today.tradeCount / tradeLimit) * 100) : 0;
+    if (trBarEl) {
+      trBarEl.style.width = `${trPct}%`;
+      trBarEl.className = `h-1.5 rounded-full transition-all duration-300 ${
+        tradeLimit <= 0 ? 'bg-slate-500' :
+        today.tradesBreached ? 'bg-rose-500' :
+        today.tradesHit ? 'bg-amber-500' : 'bg-indigo-500'
+      }`;
+    }
+    if (trBadgeEl) {
+      let badgeTxt = 'Within Cap';
+      let badgeCls = 'bg-emerald-500/15 text-emerald-500';
+      if (tradeLimit <= 0) {
+        badgeTxt = 'Off';
+        badgeCls = 'bg-slate-500/15 text-slate-400';
+      } else if (today.tradesBreached) {
+        badgeTxt = 'Over Limit';
+        badgeCls = 'bg-rose-500/15 text-rose-500';
+      } else if (today.tradesHit) {
+        badgeTxt = 'Max Reached';
+        badgeCls = 'bg-amber-500/15 text-amber-500';
+      }
+      trBadgeEl.textContent = badgeTxt;
+      trBadgeEl.className = `px-2 py-0.5 rounded-full text-[10px] font-bold ${badgeCls}`;
+    }
+    if (trSubEl) {
+      if (tradeLimit <= 0) {
+        trSubEl.textContent = `${today.tradeCount} executed trade(s) today`;
+      } else if (today.tradesBreached) {
+        trSubEl.textContent = `${today.tradeCount - tradeLimit} trade(s) over your daily cap!`;
+      } else if (today.tradesHit) {
+        trSubEl.textContent = '0 trades left — step away for today';
+      } else {
+        const left = tradeLimit - today.tradeCount;
+        trSubEl.textContent = `${left} trade${left === 1 ? '' : 's'} remaining today`;
+      }
+    }
+
+    // 3. Multi-Day Compliance Summary Cards
+    const lossCompPctEl = document.getElementById('dl-loss-compliance-pct');
+    const lossCompSubEl = document.getElementById('dl-loss-compliance-sub');
+    const worstDayEl = document.getElementById('dl-worst-day-sub');
+    const lossCompPct = totalDays > 0 ? Math.round((withinLossDays / totalDays) * 100) : 100;
+    if (lossCompPctEl) {
+      lossCompPctEl.textContent = `${lossCompPct}%`;
+      lossCompPctEl.className = `text-lg font-black ${breachedLossDays > 0 ? 'text-amber-500' : 'text-emerald-500'}`;
+    }
+    if (lossCompSubEl) lossCompSubEl.textContent = `${breachedLossDays} of ${totalDays} trading day(s) breached`;
+    if (worstDayEl) worstDayEl.textContent = worstDayLoss > 0 ? `Worst day: -$${worstDayLoss.toFixed(2)}` : 'Worst day: $0.00';
+
+    const trCompPctEl = document.getElementById('dl-trades-compliance-pct');
+    const trCompSubEl = document.getElementById('dl-trades-compliance-sub');
+    const peakTradesEl = document.getElementById('dl-peak-trades-sub');
+    const trCompPct = totalDays > 0 ? Math.round((withinTradeDays / totalDays) * 100) : 100;
+    if (trCompPctEl) {
+      trCompPctEl.textContent = `${trCompPct}%`;
+      trCompPctEl.className = `text-lg font-black ${breachedTradeDays > 0 ? 'text-amber-500' : 'text-indigo-500'}`;
+    }
+    if (trCompSubEl) trCompSubEl.textContent = `${breachedTradeDays} of ${totalDays} day(s) exceeded cap`;
+    if (peakTradesEl) peakTradesEl.textContent = `Peak day: ${peakDayTrades} trade${peakDayTrades === 1 ? '' : 's'}`;
+
+    renderDailyLossChart(stats);
+    renderDailyTradesChart(stats);
+    renderDailyLimitsTable(stats);
+  }
+
+  function renderDailyLossChart(stats) {
+    const canvas = document.getElementById('daily-loss-chart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (dailyLossChart) dailyLossChart.destroy();
+
+    const theme = getChartTheme();
+    const days = stats.days.length > 0 ? stats.days : [stats.today];
+    const labels = days.map(d => formatShortDayLabel(d.dateKey));
+    const values = days.map(d => d.netPnL);
+    const barColors = days.map(d => {
+      if (d.netPnL >= 0) return '#10B981';
+      if (stats.lossLimit > 0 && d.dailyLoss >= stats.lossLimit) return '#DC2626';
+      return '#F87171';
+    });
+
+    const limitVal = stats.lossLimit > 0 ? -stats.lossLimit : null;
+    const suggestedMin = stats.lossLimit > 0
+      ? Math.min(-stats.lossLimit * 1.2, -stats.worstDayLoss * 1.1)
+      : undefined;
+
+    dailyLossChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Daily Net P&L ($)',
+          data: values,
+          backgroundColor: barColors,
+          borderRadius: 6,
+          maxBarThickness: 42
+        }]
+      },
+      plugins: [createHorizontalLimitPlugin(limitVal, '#EF4444', stats.lossLimit > 0 ? `Max Loss: -$${stats.lossLimit}` : '')],
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: theme.tooltipBg,
+            titleColor: theme.tooltipTitle,
+            bodyColor: theme.tooltipBody,
+            borderColor: theme.tooltipBorder,
+            borderWidth: 1,
+            callbacks: {
+              label: function(context) {
+                const v = context.parsed.y || 0;
+                const d = days[context.dataIndex];
+                const status = (stats.lossLimit > 0 && d && d.lossHit)
+                  ? (d.lossBreached ? ' (BREACHED)' : ' (LIMIT HIT)')
+                  : '';
+                return `Net P&L: ${v >= 0 ? '+$' : '-$'}${Math.abs(v).toFixed(2)}${status}`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: theme.tickColor, font: { size: 10 } } },
+          y: {
+            suggestedMin,
+            grid: { color: theme.gridColor },
+            ticks: {
+              color: theme.tickColor,
+              font: { size: 10 },
+              callback: value => `${value >= 0 ? '$' : '-$'}${Math.abs(value)}`
+            }
+          }
+        }
+      }
+    });
+  }
+
+  function renderDailyTradesChart(stats) {
+    const canvas = document.getElementById('daily-trades-chart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (dailyTradesChart) dailyTradesChart.destroy();
+
+    const theme = getChartTheme();
+    const days = stats.days.length > 0 ? stats.days : [stats.today];
+    const labels = days.map(d => formatShortDayLabel(d.dateKey));
+    const values = days.map(d => d.tradeCount);
+    const barColors = days.map(d => {
+      if (stats.tradeLimit > 0 && d.tradesBreached) return '#EF4444';
+      if (stats.tradeLimit > 0 && d.tradesHit) return '#F59E0B';
+      return '#6366F1';
+    });
+
+    const limitVal = stats.tradeLimit > 0 ? stats.tradeLimit : null;
+    const suggestedMax = stats.tradeLimit > 0
+      ? Math.max(stats.tradeLimit + 1, stats.peakDayTrades + 1)
+      : Math.max(3, stats.peakDayTrades + 1);
+
+    dailyTradesChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Executed Trades',
+          data: values,
+          backgroundColor: barColors,
+          borderRadius: 6,
+          maxBarThickness: 42
+        }]
+      },
+      plugins: [createHorizontalLimitPlugin(limitVal, '#F59E0B', stats.tradeLimit > 0 ? `Max Trades: ${stats.tradeLimit}` : '')],
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: theme.tooltipBg,
+            titleColor: theme.tooltipTitle,
+            bodyColor: theme.tooltipBody,
+            borderColor: theme.tooltipBorder,
+            borderWidth: 1,
+            callbacks: {
+              label: function(context) {
+                const cnt = context.parsed.y || 0;
+                const capStr = stats.tradeLimit > 0 ? ` / ${stats.tradeLimit} limit` : '';
+                return `Trades: ${cnt}${capStr}`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: theme.tickColor, font: { size: 10 } } },
+          y: {
+            beginAtZero: true,
+            suggestedMax,
+            grid: { color: theme.gridColor },
+            ticks: {
+              stepSize: 1,
+              color: theme.tickColor,
+              font: { size: 10 }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  function renderDailyLimitsTable(stats) {
+    const tbody = document.getElementById('daily-limits-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (stats.days.length === 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td colspan="6" class="py-5 px-4 text-center text-slate-400">No executed trades logged yet. Log a trade to track daily limits.</td>';
+      tbody.appendChild(tr);
+      return;
+    }
+
+    const daysDesc = [...stats.days].reverse();
+    daysDesc.forEach(d => {
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-slate-800/30 transition-colors';
+
+      const pnlText = `${d.netPnL >= 0 ? '+$' : '-$'}${Math.abs(d.netPnL).toFixed(2)}`;
+      const pnlCls = d.netPnL >= 0 ? 'text-emerald-500' : 'text-rose-500';
+      const rText = `${d.netR >= 0 ? '+' : ''}${d.netR.toFixed(1)}R`;
+
+      let lossBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-500">Within Limit</span>';
+      if (stats.lossLimit <= 0) {
+        lossBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-500/15 text-slate-400">Off</span>';
+      } else if (d.lossBreached) {
+        lossBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-500">Breached</span>';
+      } else if (d.lossHit) {
+        lossBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-500">Limit Hit</span>';
+      }
+
+      let tradeBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-500">Within Cap</span>';
+      if (stats.tradeLimit <= 0) {
+        tradeBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-500/15 text-slate-400">Off</span>';
+      } else if (d.tradesBreached) {
+        tradeBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-500">Over Limit</span>';
+      } else if (d.tradesHit) {
+        tradeBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-500">At Cap</span>';
+      }
+
+      const capLabel = stats.tradeLimit > 0 ? `${d.tradeCount} / ${stats.tradeLimit}` : `${d.tradeCount}`;
+      const isToday = d.dateKey === stats.today.dateKey;
+
+      tr.innerHTML = `
+        <td class="py-2.5 px-3 font-semibold text-white whitespace-nowrap">
+          ${formatShortDayLabel(d.dateKey, true)}
+          ${isToday ? '<span class="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-400 font-bold">Today</span>' : ''}
+        </td>
+        <td class="py-2.5 px-3 text-center font-bold ${d.tradesBreached ? 'text-rose-500' : 'text-slate-300'}">${capLabel}</td>
+        <td class="py-2.5 px-3 text-right font-mono font-bold ${pnlCls}">${pnlText}</td>
+        <td class="py-2.5 px-3 text-right font-mono font-semibold ${d.netR >= 0 ? 'text-emerald-500' : 'text-rose-500'}">${rText}</td>
+        <td class="py-2.5 px-3 text-center">${lossBadge}</td>
+        <td class="py-2.5 px-3 text-center">${tradeBadge}</td>
+      `;
+      tbody.appendChild(tr);
+    });
   }
 
   function renderEquityCurve() {
@@ -1758,9 +2270,41 @@ const TradeApp = (function() {
       deleteBtn.classList.add('hidden');
     }
 
+    updateModalDailyLimitWarning();
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     document.getElementById('input-trade-symbol').focus();
+  }
+
+  function updateModalDailyLimitWarning() {
+    const banner = document.getElementById('modal-daily-limit-warning');
+    const textEl = document.getElementById('modal-daily-limit-warning-text');
+    if (!banner || !textEl) return;
+
+    const editId = document.getElementById('trade-id')?.value;
+    const isMissed = document.getElementById('trade-is-missed')?.value === 'true';
+    if (editId || isMissed) {
+      banner.classList.add('hidden');
+      return;
+    }
+
+    const stats = computeDailyStats();
+    const alerts = [];
+    if (stats.today.lossHit) {
+      const verb = stats.today.lossBreached ? 'exceeded' : 'reached';
+      alerts.push(`Daily loss limit ($${stats.lossLimit}) ${verb} today (-$${stats.today.dailyLoss.toFixed(2)}).`);
+    }
+    if (stats.today.tradesHit) {
+      const verb = stats.today.tradesBreached ? 'exceeded' : 'reached';
+      alerts.push(`Daily trade limit (${stats.tradeLimit}/day) ${verb} today (${stats.today.tradeCount} executed).`);
+    }
+
+    if (alerts.length > 0) {
+      textEl.textContent = `${alerts.join(' ')} Stop or double-check your rules before taking another trade.`;
+      banner.classList.remove('hidden');
+    } else {
+      banner.classList.add('hidden');
+    }
   }
 
   function closeTradeModal() {
@@ -1789,6 +2333,7 @@ const TradeApp = (function() {
       execSection.classList.remove('hidden');
       missedSection.classList.add('hidden');
     }
+    updateModalDailyLimitWarning();
   }
 
   function setDirection(dir) {
@@ -2142,16 +2687,39 @@ const TradeApp = (function() {
     const emptyDemo = document.getElementById('btn-empty-demo');
     if (emptyDemo) emptyDemo.addEventListener('click', () => loadDemoTrades());
 
-    // Settings Modal
+    // Settings Modal & Inline Daily Limit Controls
     const settingsModal = document.getElementById('modal-settings');
     document.getElementById('btn-open-settings').addEventListener('click', () => {
+      syncLimitInputs();
       settingsModal.classList.remove('hidden');
       settingsModal.classList.add('flex');
     });
     document.getElementById('btn-close-settings-modal').addEventListener('click', () => {
       settingsModal.classList.add('hidden');
       settingsModal.classList.remove('flex');
-      saveSettings();
+      saveSettings('settings');
+    });
+
+    const btnSaveDailyLimits = document.getElementById('btn-save-daily-limits');
+    if (btnSaveDailyLimits) {
+      btnSaveDailyLimits.addEventListener('click', () => saveSettings('analytics'));
+    }
+
+    [
+      { ids: ['analytics-daily-loss-limit', 'analytics-daily-trade-limit'], source: 'analytics' },
+      { ids: ['setting-initial-balance', 'setting-daily-loss-limit', 'setting-daily-trade-limit'], source: 'settings' }
+    ].forEach(({ ids, source }) => {
+      ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('change', () => saveSettings(source));
+        el.addEventListener('keydown', e => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            saveSettings(source);
+          }
+        });
+      });
     });
 
     document.getElementById('btn-reset-data').addEventListener('click', () => {
