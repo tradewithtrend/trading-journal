@@ -462,8 +462,17 @@ const TradeApp = (function() {
     }
   }
 
+  // Sort trades newest/last trade on top (descending by tradeNum, then date)
+  function sortTradesNewestFirst(list) {
+    return list.sort((a, b) => {
+      const numDiff = (parseInt(b.tradeNum, 10) || 0) - (parseInt(a.tradeNum, 10) || 0);
+      if (numDiff !== 0) return numDiff;
+      return new Date(b.date || 0) - new Date(a.date || 0);
+    });
+  }
+
   function saveTrades(triggerSync = true) {
-    trades.sort((a, b) => (parseInt(a.tradeNum, 10) || 0) - (parseInt(b.tradeNum, 10) || 0));
+    sortTradesNewestFirst(trades);
 
     // 1. Always save a complete backup in high-capacity IndexedDB
     if (typeof TradeStorage !== 'undefined') {
@@ -709,6 +718,9 @@ const TradeApp = (function() {
       }
       return true;
     });
+
+    // Always show newest / last trade at the top of the table
+    sortTradesNewestFirst(filtered);
 
     if (filtered.length === 0) {
       emptyState.classList.remove('hidden');
@@ -1256,6 +1268,12 @@ const TradeApp = (function() {
     lightbox.classList.remove('flex');
   }
 
+  /** Compute the next unique trade number (max existing + 1, capped at 100). */
+  function getNextTradeNum() {
+    const maxNum = trades.reduce((max, t) => Math.max(max, parseInt(t.tradeNum, 10) || 0), 0);
+    return Math.min(100, maxNum + 1);
+  }
+
   // Open Trade Modal
   function openTradeModal(editId = null) {
     const modal = document.getElementById('modal-trade');
@@ -1349,7 +1367,7 @@ const TradeApp = (function() {
       deleteBtn.classList.remove('hidden');
     } else {
       // New Trade
-      const nextNum = Math.min(100, trades.length + 1);
+      const nextNum = getNextTradeNum();
       document.getElementById('trade-id').value = '';
       badge.textContent = `Phase 1: Trade #${nextNum} / 100`;
 
@@ -1449,10 +1467,9 @@ const TradeApp = (function() {
     e.preventDefault();
 
     const id = document.getElementById('trade-id').value || 'tr_' + Date.now();
+    const existingTrade = trades.find(t => t.id === id) || null;
     const isMissed = document.getElementById('trade-is-missed').value === 'true';
-    const tradeNum = id && trades.some(t => t.id === id)
-      ? trades.find(t => t.id === id).tradeNum
-      : Math.min(100, trades.filter(t => !t.isMissed).length + 1);
+    const tradeNum = existingTrade ? existingTrade.tradeNum : getNextTradeNum();
 
     const symbol = document.getElementById('input-trade-symbol').value.trim().toUpperCase();
     const isLong = document.getElementById('btn-dir-long').classList.contains('active');
@@ -1460,19 +1477,36 @@ const TradeApp = (function() {
     const strategy = document.getElementById('input-trade-strategy').value;
     const emotion = document.getElementById('input-trade-emotion').value;
     const notes = document.getElementById('input-trade-notes').value.trim();
-    const screenshot = currentScreenshot;
+
+    let screenshot = '';
+    let chartUrl = '';
+    if (currentScreenshot) {
+      if (currentScreenshot.startsWith('https://lh3.googleusercontent.com') || currentScreenshot.startsWith('https://drive.google.com')) {
+        screenshot = existingTrade ? (existingTrade.screenshot || '') : '';
+        chartUrl = existingTrade ? (existingTrade.chartUrl || currentScreenshot) : currentScreenshot;
+      } else if (currentScreenshot.startsWith('data:')) {
+        screenshot = currentScreenshot;
+        chartUrl = (existingTrade && currentScreenshot === existingTrade.screenshot)
+          ? (existingTrade.chartUrl || '')
+          : '';
+      } else {
+        screenshot = existingTrade ? (existingTrade.screenshot || '') : '';
+        chartUrl = currentScreenshot;
+      }
+    }
 
     let tradeObj = {
       id,
       tradeNum,
-      date: new Date().toISOString(),
+      date: (existingTrade && existingTrade.date) ? existingTrade.date : new Date().toISOString(),
       symbol,
       direction,
       strategy,
       emotion,
       notes,
       screenshot,
-      hasScreenshot: Boolean(screenshot),
+      chartUrl,
+      hasScreenshot: Boolean(screenshot || chartUrl),
       isMissed
     };
 
@@ -1531,8 +1565,12 @@ const TradeApp = (function() {
     }
 
     saveTrades(true);
-    if (screenshot && typeof TradeStorage !== 'undefined') {
-      TradeStorage.saveScreenshot(id, screenshot, tradeNum);
+    if (typeof TradeStorage !== 'undefined') {
+      if (screenshot && screenshot.startsWith('data:')) {
+        TradeStorage.saveScreenshot(id, screenshot, tradeNum);
+      } else if (!currentScreenshot) {
+        TradeStorage.deleteScreenshot(id, tradeNum);
+      }
     }
     closeTradeModal();
   }

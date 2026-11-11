@@ -57,25 +57,50 @@ function doPost(e) {
       }
     }
 
-    var trades = data.trades || [];
+    var trades = sortTradesNewestFirst_(data.trades || []);
 
     // Clear existing data rows if receiving a valid sync payload
     if (trades.length > 0) {
       var lastRow = sheet.getLastRow();
       var lastCol = Math.max(sheet.getLastColumn(), 15);
 
-      // Read existing formulas/rich text before clearing so existing charts are preserved
+      // Read existing chart links keyed by Trade # before clearing so sorting newest-first preserves charts
+      var existingKeys = (lastRow > 1) ? sheet.getRange(2, 1, lastRow - 1, 2).getValues() : [];
       var existingFormulas = (lastRow > 1) ? sheet.getRange(2, 1, lastRow - 1, lastCol).getFormulas() : [];
       var existingRichTexts = [];
       try {
         if (lastRow > 1) existingRichTexts = sheet.getRange(2, 1, lastRow - 1, lastCol).getRichTextValues();
       } catch (e) {}
 
+      var existingChartByKey = {};
+      for (var r = 0; r < existingKeys.length; r++) {
+        var existingUrl = '';
+        if (existingRichTexts && existingRichTexts[r] && existingRichTexts[r][14]) {
+          existingUrl = existingRichTexts[r][14].getLinkUrl() || '';
+        }
+        if (!existingUrl && existingFormulas && existingFormulas[r] && existingFormulas[r][14]) {
+          var ef = String(existingFormulas[r][14]);
+          var ematch = ef.match(/https?:\/\/[^\s"\)]+/);
+          if (ematch) existingUrl = ematch[0];
+        }
+        if (!existingUrl) continue;
+
+        var numKey = String(existingKeys[r][0] !== undefined ? existingKeys[r][0] : '').trim();
+        var rawExistingDate = existingKeys[r][1];
+        var dateKey = rawExistingDate instanceof Date ? rawExistingDate.toISOString() : String(rawExistingDate || '').trim();
+        if (numKey && dateKey) {
+          existingChartByKey[numKey + '|' + dateKey] = existingUrl;
+        }
+        if (numKey && numKey !== '0') {
+          existingChartByKey[numKey] = existingUrl;
+        }
+      }
+
       if (lastRow > 1) {
         sheet.getRange(2, 1, lastRow - 1, lastCol).clearContent();
       }
 
-      var rows = trades.map(function(t, idx) {
+      var rows = trades.map(function(t) {
         var mistakeText = Array.isArray(t.mistakes) ? t.mistakes.join('; ') : (t.mistake || '');
         
         // 1. Process Chart Screenshot: upload to Google Drive if new base64 image
@@ -84,14 +109,14 @@ function doPost(e) {
           chartUrl = saveChartToDrive(t.screenshot, t.tradeNum, t.symbol);
         }
 
-        // 2. Fallback to existing chart in sheet row if not re-sent
-        if (!chartUrl && existingRichTexts && existingRichTexts[idx] && existingRichTexts[idx][14]) {
-          chartUrl = existingRichTexts[idx][14].getLinkUrl() || '';
+        // 2. Fallback to existing chart for this Trade # if not re-sent
+        var tNumKey = String(t.tradeNum !== undefined ? t.tradeNum : '').trim();
+        var tDateKey = String(t.date || '').trim();
+        if (!chartUrl && tNumKey && tDateKey && existingChartByKey[tNumKey + '|' + tDateKey]) {
+          chartUrl = existingChartByKey[tNumKey + '|' + tDateKey];
         }
-        if (!chartUrl && existingFormulas && existingFormulas[idx] && existingFormulas[idx][14]) {
-          var f = String(existingFormulas[idx][14]);
-          var match = f.match(/https?:\/\/[^\s"\)]+/);
-          if (match) chartUrl = match[0];
+        if (!chartUrl && tNumKey && tNumKey !== '0' && existingChartByKey[tNumKey]) {
+          chartUrl = existingChartByKey[tNumKey];
         }
 
         // Formula or text for Column O
@@ -202,6 +227,17 @@ function setupHeaders(sheet) {
   sheet.setFrozenRows(1);
 }
 
+function sortTradesNewestFirst_(list) {
+  return (list || []).slice().sort(function(a, b) {
+    var numA = parseInt(a.tradeNum, 10) || 0;
+    var numB = parseInt(b.tradeNum, 10) || 0;
+    if (numB !== numA) return numB - numA;
+    var timeA = a.date ? new Date(a.date).getTime() : 0;
+    var timeB = b.date ? new Date(b.date).getTime() : 0;
+    return (isNaN(timeB) ? 0 : timeB) - (isNaN(timeA) ? 0 : timeA);
+  });
+}
+
 function doGet(e) {
   try {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
@@ -234,7 +270,8 @@ function doGet(e) {
         dateStr = String(rawDate || '');
       }
 
-      var tradeNum = parseInt(row[0], 10) || (idx + 1);
+      var parsedNum = parseInt(row[0], 10);
+      var tradeNum = !isNaN(parsedNum) ? parsedNum : (isMissed ? 0 : (data.length - idx));
 
       // Extract chart URL from Column 15 (Column O) via RichText, Formula, or plain text
       var chartUrl = '';
@@ -282,6 +319,8 @@ function doGet(e) {
         hasScreenshot: Boolean(chartUrl)
       };
     });
+
+    trades = sortTradesNewestFirst_(trades);
 
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",

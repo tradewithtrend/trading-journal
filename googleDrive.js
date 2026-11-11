@@ -286,6 +286,13 @@ const GoogleDriveSync = (function() {
           const remoteTrades = data.trades;
           const localTrades = TradeApp.getTrades() || [];
 
+          const compareNewestFirst = (a, b) => {
+            const numDiff = (parseInt(b.tradeNum, 10) || 0) - (parseInt(a.tradeNum, 10) || 0);
+            if (numDiff !== 0) return numDiff;
+            return new Date(b.date || 0) - new Date(a.date || 0);
+          };
+          const isOutOfOrder = list => list.some((t, i) => i > 0 && compareNewestFirst(list[i - 1], t) > 0);
+
           // Hydrate screenshots for all remote trades from local state or IndexedDB
           for (const remoteTrade of remoteTrades) {
             const num = parseInt(remoteTrade.tradeNum, 10);
@@ -300,6 +307,9 @@ const GoogleDriveSync = (function() {
                 remoteTrade.hasScreenshot = true;
               }
             }
+            if (remoteTrade.chartUrl) {
+              remoteTrade.hasScreenshot = true;
+            }
           }
 
           if (remoteTrades.length === 0 && localTrades.length === 0) {
@@ -307,10 +317,14 @@ const GoogleDriveSync = (function() {
               showToast('Google Sheet is connected, but has no trades yet.', 'info');
             }
           } else if (remoteTrades.length > 0 && localTrades.length === 0) {
-            // Restore all remote trades to local
-            TradeApp.setTrades(remoteTrades);
+            // Restore all remote trades to local (newest first) and flip sheet if ascending
+            const sortedRemote = [...remoteTrades].sort(compareNewestFirst);
+            TradeApp.setTrades(sortedRemote);
+            if (remoteTrades.length > 1 && isOutOfOrder(remoteTrades)) {
+              syncToGoogleSheetWebhook({ trades: sortedRemote });
+            }
             if (options.notify) {
-              showToast(`Restored ${remoteTrades.length} trade(s) from your Google Sheet!`, 'success');
+              showToast(`Restored ${sortedRemote.length} trade(s) from your Google Sheet!`, 'success');
             }
           } else if (remoteTrades.length === 0 && localTrades.length > 0) {
             // Push local trades to remote sheet
@@ -350,15 +364,14 @@ const GoogleDriveSync = (function() {
               }
               mergedMap.set(num, remoteTrade);
             }
-            const mergedList = Array.from(mergedMap.values())
-              .sort((a, b) => (parseInt(a.tradeNum, 10) || 0) - (parseInt(b.tradeNum, 10) || 0));
+            const mergedList = Array.from(mergedMap.values()).sort(compareNewestFirst);
 
             TradeApp.setTrades(mergedList);
             if (options.notify) {
               showToast(`Synchronized ${mergedList.length} trade(s) with Google Sheet!`, 'success');
             }
 
-            if (mergedList.length > remoteTrades.length) {
+            if (mergedList.length > remoteTrades.length || (remoteTrades.length > 1 && isOutOfOrder(remoteTrades))) {
               syncToGoogleSheetWebhook({ trades: mergedList });
             }
           }
