@@ -109,10 +109,15 @@ function doPost(e) {
     if (sheet.getLastRow() === 0) {
       setupHeaders(sheet);
     } else {
-      // Ensure column 15 header exists
+      // Ensure column 15 and 16 headers exist
       var headerVal = sheet.getRange(1, 15).getValue();
       if (!headerVal || headerVal === '') {
         sheet.getRange(1, 15).setValue("Chart Screenshot")
+          .setFontWeight("bold").setBackground("#131B2E").setFontColor("#FFFFFF");
+      }
+      var header16 = sheet.getRange(1, 16).getValue();
+      if (!header16 || header16 === '') {
+        sheet.getRange(1, 16).setValue("Timeframe")
           .setFontWeight("bold").setBackground("#131B2E").setFontColor("#FFFFFF");
       }
     }
@@ -122,7 +127,7 @@ function doPost(e) {
     // Clear existing data rows if receiving a valid sync payload
     if (trades.length > 0) {
       var lastRow = sheet.getLastRow();
-      var lastCol = Math.max(sheet.getLastColumn(), 15);
+      var lastCol = Math.max(sheet.getLastColumn(), 16);
 
       // Read existing chart links keyed by Trade # before clearing so sorting & updates preserve charts
       var existingValues = (lastRow > 1) ? sheet.getRange(2, 1, lastRow - 1, lastCol).getValues() : [];
@@ -248,17 +253,18 @@ function doPost(e) {
           t.emotion || '',
           t.missedReason || '',
           t.notes || '',
-          '-'
+          '-',
+          t.timeframe || ''
         ];
       });
 
-      sheet.getRange(2, 1, rows.length, 15).setValues(rows);
+      sheet.getRange(2, 1, rows.length, 16).setValues(rows);
       var colORange = sheet.getRange(2, 15, rows.length, 1);
       colORange.setRichTextValues(colORichTexts);
       colORange.setWrap(true);
 
-      // Format header row across 15 columns
-      sheet.getRange(1, 1, 1, 15).setFontWeight("bold").setBackground("#131B2E").setFontColor("#FFFFFF");
+      // Format header row across 16 columns
+      sheet.getRange(1, 1, 1, 16).setFontWeight("bold").setBackground("#131B2E").setFontColor("#FFFFFF");
       sheet.setFrozenRows(1);
     }
 
@@ -333,7 +339,7 @@ function setupHeaders(sheet) {
     "Trade #", "Date & Time", "Type", "Symbol", "Direction",
     "Realized P&L ($)", "Realized R", "Outcome", "Setup / Strategy",
     "Rules Kept?", "Mistakes / Rule Breaks", "Psychology / Emotion",
-    "Missed Reason", "1 Key Lesson / Notes", "Chart Screenshot"
+    "Missed Reason", "1 Key Lesson / Notes", "Chart Screenshot", "Timeframe"
   ];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#131B2E").setFontColor("#FFFFFF");
@@ -475,6 +481,7 @@ function doGet(e) {
         isMissed: isMissed,
         symbol: String(row[3] || '').toUpperCase(),
         direction: String(row[4] || 'LONG').toUpperCase(),
+        timeframe: String(row[15] || ''),
         realizedPnL: !isMissed ? pnlVal : 0,
         realizedR: !isMissed ? rVal : 0,
         missedPnL: isMissed ? pnlVal : 0,

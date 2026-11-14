@@ -1035,6 +1035,7 @@ const TradeApp = (function() {
         const query = currentFilter.search.toLowerCase();
         const matchesSearch =
           (t.symbol && t.symbol.toLowerCase().includes(query)) ||
+          (t.timeframe && t.timeframe.toLowerCase().includes(query)) ||
           (t.strategy && t.strategy.toLowerCase().includes(query)) ||
           (t.notes && t.notes.toLowerCase().includes(query)) ||
           (t.emotion && t.emotion.toLowerCase().includes(query)) ||
@@ -1106,7 +1107,10 @@ const TradeApp = (function() {
         </td>
         <td class="py-3 px-3 text-slate-400 whitespace-nowrap">${dateStr}</td>
         <td class="py-3 px-3">
-          <div class="font-bold text-white">${t.symbol || 'N/A'}</div>
+          <div class="flex items-center space-x-1.5">
+            <span class="font-bold text-white">${t.symbol || 'N/A'}</span>
+            ${t.timeframe ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">${t.timeframe}</span>` : ''}
+          </div>
         </td>
         <td class="py-3 px-3">
           <span class="text-[10px] px-1.5 py-0.5 rounded font-bold ${isMissed ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-slate-800 text-slate-300'}">
@@ -2408,7 +2412,8 @@ const TradeApp = (function() {
         if (trade.quantity) document.getElementById('input-det-qty').value = trade.quantity;
       }
 
-      // Strategy
+      // Timeframe & Strategy
+      selectTimeframe(trade.timeframe || '15m');
       selectStrategy(trade.strategy || 'Breakout & Retest');
 
       // Rule followed
@@ -2471,6 +2476,7 @@ const TradeApp = (function() {
       setDirection('LONG');
       setTradeMode('EXECUTED');
       setRuleDiscipline(true);
+      selectTimeframe('15m');
       selectStrategy('Breakout & Retest');
       selectEmotion('Calm & Patient');
 
@@ -2578,6 +2584,22 @@ const TradeApp = (function() {
     }
   }
 
+  function selectTimeframe(tfName) {
+    const clean = (tfName || '').trim();
+    const hiddenInput = document.getElementById('input-trade-timeframe');
+    if (hiddenInput) hiddenInput.value = clean;
+    let matched = false;
+    document.querySelectorAll('#timeframe-chips .chip-btn').forEach(btn => {
+      const isMatch = !!clean && btn.dataset.val.toLowerCase() === clean.toLowerCase();
+      btn.classList.toggle('active', isMatch);
+      if (isMatch) matched = true;
+    });
+    const customInput = document.getElementById('input-trade-timeframe-custom');
+    if (customInput) {
+      customInput.value = matched ? '' : clean;
+    }
+  }
+
   function selectStrategy(strategyName) {
     document.getElementById('input-trade-strategy').value = strategyName;
     document.querySelectorAll('#strategy-chips .chip-btn').forEach(btn => {
@@ -2604,6 +2626,7 @@ const TradeApp = (function() {
     const symbol = document.getElementById('input-trade-symbol').value.trim().toUpperCase();
     const isLong = document.getElementById('btn-dir-long').classList.contains('active');
     const direction = isLong ? 'LONG' : 'SHORT';
+    const timeframe = (document.getElementById('input-trade-timeframe')?.value || '15m').trim();
     const strategy = document.getElementById('input-trade-strategy').value;
     const emotion = document.getElementById('input-trade-emotion').value;
     const notes = document.getElementById('input-trade-notes').value.trim();
@@ -2624,6 +2647,7 @@ const TradeApp = (function() {
       date: (existingTrade && existingTrade.date) ? existingTrade.date : new Date().toISOString(),
       symbol,
       direction,
+      timeframe,
       strategy,
       emotion,
       notes,
@@ -2713,39 +2737,39 @@ const TradeApp = (function() {
     trades = [
       {
         id: 'demo_1', tradeNum: 1, date: '2026-10-20T09:40', symbol: 'BTCUSDT', direction: 'LONG',
-        outcome: 'WIN', realizedPnL: 380, realizedR: 2.5, plannedRisk: 150, strategy: 'Liquidity Sweep / FVG',
+        timeframe: '15m', outcome: 'WIN', realizedPnL: 380, realizedR: 2.5, plannedRisk: 150, strategy: 'Liquidity Sweep / FVG',
         planFollowed: true, emotion: 'Calm & Patient', mistakes: [], notes: 'Clean 15m sweep at NY open. Followed rules 100%.'
       },
       {
         id: 'demo_2', tradeNum: 2, date: '2026-10-21T10:15', symbol: 'NVDA', direction: 'LONG',
-        outcome: 'LOSS', realizedPnL: -150, realizedR: -1.0, plannedRisk: 150, strategy: 'Breakout & Retest',
+        timeframe: '1h', outcome: 'LOSS', realizedPnL: -150, realizedR: -1.0, plannedRisk: 150, strategy: 'Breakout & Retest',
         planFollowed: true, emotion: 'Confident / Focused', mistakes: [], notes: 'Good trade, breakout failed, stop respected without emotion.'
       },
       {
         id: 'demo_3', tradeNum: 3, date: '2026-10-22T14:10', symbol: 'NQ', direction: 'SHORT',
-        outcome: 'LOSS', realizedPnL: -320, realizedR: -2.1, plannedRisk: 150, strategy: 'Order Block / S&D',
+        timeframe: '5m', outcome: 'LOSS', realizedPnL: -320, realizedR: -2.1, plannedRisk: 150, strategy: 'Order Block / S&D',
         planFollowed: false, emotion: 'Frustrated / Revenge', mistakes: ['Moved Stop Loss', 'Revenge Trade'],
         notes: 'Violated rules: moved stop loss mid-trade during chop. Costly mistake.'
       },
       {
         id: 'demo_4', tradeNum: 4, date: '2026-10-24T11:00', symbol: 'ETHUSDT', direction: 'LONG',
-        outcome: 'WIN', realizedPnL: 450, realizedR: 3.0, plannedRisk: 150, strategy: 'Trend Pullback (EMA)',
+        timeframe: '4h', outcome: 'WIN', realizedPnL: 450, realizedR: 3.0, plannedRisk: 150, strategy: 'Trend Pullback (EMA)',
         planFollowed: true, emotion: 'Calm & Patient', mistakes: [], notes: 'Rode 4h trend pullback straight to target.'
       },
       {
         id: 'demo_5', tradeNum: 5, date: '2026-10-25T09:30', symbol: 'ES', direction: 'LONG',
-        isMissed: true, outcome: 'MISSED', missedOutcome: 'WIN', missedPnL: 350, missedR: 2.3,
+        timeframe: '15m', isMissed: true, outcome: 'MISSED', missedOutcome: 'WIN', missedPnL: 350, missedR: 2.3,
         strategy: 'Opening Range (ORB)', emotion: 'Hesitation / Fear', missedReason: 'Hesitation / Fear',
         notes: 'Hesitated on the trigger after previous loss. Missed an easy 2.3R winner.'
       },
       {
         id: 'demo_6', tradeNum: 6, date: '2026-10-28T13:45', symbol: 'SOLUSDT', direction: 'LONG',
-        outcome: 'WIN', realizedPnL: 520, realizedR: 3.5, plannedRisk: 150, strategy: 'Breakout & Retest',
+        timeframe: '1h', outcome: 'WIN', realizedPnL: 520, realizedR: 3.5, plannedRisk: 150, strategy: 'Breakout & Retest',
         planFollowed: true, emotion: 'Calm & Patient', mistakes: [], notes: 'Waited patiently for 1h candle close. Perfect execution.'
       },
       {
         id: 'demo_7', tradeNum: 7, date: '2026-10-30T10:00', symbol: 'EURUSD', direction: 'SHORT',
-        outcome: 'LOSS', realizedPnL: -180, realizedR: -1.2, plannedRisk: 150, strategy: 'Liquidity Sweep / FVG',
+        timeframe: '2h', outcome: 'LOSS', realizedPnL: -180, realizedR: -1.2, plannedRisk: 150, strategy: 'Liquidity Sweep / FVG',
         planFollowed: false, emotion: 'Greed / FOMO', mistakes: ['FOMO / Chased Entry'],
         notes: 'Jumped in late after candle was already extended 12 pips.'
       }
@@ -3023,6 +3047,22 @@ const TradeApp = (function() {
         }
       });
     });
+
+    // Timeframe Chips & Custom Input
+    document.querySelectorAll('#timeframe-chips .chip-btn').forEach(chip => {
+      chip.addEventListener('click', () => selectTimeframe(chip.dataset.val));
+    });
+    const customTfInput = document.getElementById('input-trade-timeframe-custom');
+    if (customTfInput) {
+      customTfInput.addEventListener('input', () => {
+        const val = customTfInput.value.trim();
+        const hiddenInput = document.getElementById('input-trade-timeframe');
+        if (hiddenInput) hiddenInput.value = val;
+        document.querySelectorAll('#timeframe-chips .chip-btn').forEach(btn => {
+          btn.classList.toggle('active', !!val && btn.dataset.val.toLowerCase() === val.toLowerCase());
+        });
+      });
+    }
 
     // Strategy Chips
     document.querySelectorAll('#strategy-chips .chip-btn').forEach(chip => {

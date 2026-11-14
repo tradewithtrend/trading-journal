@@ -300,7 +300,7 @@
           <!-- Search box -->
           <div class="relative flex-1 min-w-[180px] max-w-xs">
             <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
-            <input id="filter-search" type="text" placeholder="Search symbol, mistake, note..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition" />
+            <input id="filter-search" type="text" placeholder="Search symbol, timeframe, note..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition" />
           </div>
 
           <!-- Trade Type Filter -->
@@ -364,7 +364,7 @@
               <tr class="bg-slate-900/80 border-b border-borderSubtle text-slate-400 uppercase tracking-wider font-semibold">
                 <th class="py-3.5 px-4 w-12 text-center">#</th>
                 <th class="py-3.5 px-3">Date</th>
-                <th class="py-3.5 px-3">Symbol</th>
+                <th class="py-3.5 px-3">Symbol / TF</th>
                 <th class="py-3.5 px-3">Type</th>
                 <th class="py-3.5 px-3">Dir</th>
                 <th class="py-3.5 px-3 text-right">P&L ($)</th>
@@ -871,6 +871,33 @@
               </button>
             </div>
           </div>
+        </div>
+
+        <!-- Row 1B: Timeframe (1-Click Chips) -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between">
+            <label class="text-[11px] font-bold text-slate-400 uppercase flex items-center space-x-1.5">
+              <i data-lucide="clock" class="w-3.5 h-3.5 text-indigo-400"></i>
+              <span>Timeframe (1-Click)</span>
+            </label>
+            <div class="flex items-center space-x-1.5 text-[10px] text-slate-400">
+              <span>Custom:</span>
+              <input type="text" id="input-trade-timeframe-custom" placeholder="e.g. 2m, 3D" class="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-0.5 text-[11px] text-white focus:outline-none focus:border-indigo-500 uppercase font-semibold" />
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-1.5" id="timeframe-chips">
+            <button type="button" class="chip-btn" data-val="1m">1m</button>
+            <button type="button" class="chip-btn" data-val="3m">3m</button>
+            <button type="button" class="chip-btn" data-val="5m">5m</button>
+            <button type="button" class="chip-btn active" data-val="15m">15m</button>
+            <button type="button" class="chip-btn" data-val="30m">30m</button>
+            <button type="button" class="chip-btn" data-val="1h">1h</button>
+            <button type="button" class="chip-btn" data-val="2h">2h</button>
+            <button type="button" class="chip-btn" data-val="4h">4h</button>
+            <button type="button" class="chip-btn" data-val="Daily">Daily</button>
+            <button type="button" class="chip-btn" data-val="Weekly">Weekly</button>
+          </div>
+          <input type="hidden" id="input-trade-timeframe" value="15m" />
         </div>
 
         <!-- Row 2: Outcome & P&L (Direct & Fast, Least Writing) -->
